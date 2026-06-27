@@ -1,0 +1,889 @@
+'use client';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { gsap } from 'gsap';
+import toast from 'react-hot-toast';
+import { invoicesAPI, customersAPI, productsAPI, rollsAPI } from '@/lib/api';
+import useAuthStore from '@/store/authStore';
+import Modal from '@/components/ui/Modal';
+import {
+  HiOutlinePlus, HiOutlineTrash, HiOutlineCalculator,
+  HiOutlineMagnifyingGlass, HiOutlineXMark, HiOutlineArrowLeft,
+  HiOutlineBanknotes, HiOutlineDocumentText, HiOutlineCurrencyDollar,
+  HiOutlineCheck,
+} from 'react-icons/hi2';
+
+const roleLabels = {
+  administrator: 'Administrator',
+  manager: 'Manager',
+  cashier: 'Cashier',
+  storekeeper: 'Storekeeper',
+};
+
+export default function NewInvoicePage() {
+  const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+
+  const [type, setType] = useState('proforma');
+  const [invoiceCode, setInvoiceCode] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [validityDate, setValidityDate] = useState('');
+  const [billTo, setBillTo] = useState('');
+  const [customer, setCustomer] = useState(null);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerResults, setCustomerResults] = useState([]);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [customerName, setCustomerName] = useState('');
+  const [customerTelephone, setCustomerTelephone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [items, setItems] = useState([{ description: '', quantity: 1, unit: 'pcs', unitPrice: 0, product: null, roll: null, rollId: '' }]);
+  const [subtotal, setSubtotal] = useState(0);
+  
+  const [amountPaid, setAmountPaid] = useState(0);
+  const [grandTotal, setGrandTotal] = useState(0);
+  const [balanceDue, setBalanceDue] = useState(0);
+  const [paymentStatus, setPaymentStatus] = useState('unpaid');
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const [showCalcPopover, setShowCalcPopover] = useState(false);
+  const [calcItemIndex, setCalcItemIndex] = useState(null);
+  const [calcYards, setCalcYards] = useState('');
+  const [calcLength, setCalcLength] = useState('');
+  const [calcWidth, setCalcWidth] = useState('');
+
+  // Invoice search + auto-fill
+  const [invoiceSearch, setInvoiceSearch] = useState('');
+  const [invoiceResults, setInvoiceResults] = useState([]);
+  const [showInvoiceDropdown, setShowInvoiceDropdown] = useState(false);
+  const [invoiceSearchLoading, setInvoiceSearchLoading] = useState(false);
+  const [loadedFrom, setLoadedFrom] = useState(null);
+
+  const [productSearch, setProductSearch] = useState('');
+  const [productResults, setProductResults] = useState([]);
+  const [showProductDropdown, setShowProductDropdown] = useState(null);
+  const [activeRolls, setActiveRolls] = useState({});
+
+  const containerRef = useRef(null);
+  const headerRef = useRef(null);
+  const invoiceSearchCardRef = useRef(null);
+  const detailsCardRef = useRef(null);
+  const itemsCardRef = useRef(null);
+  const summaryCardRef = useRef(null);
+  const bankCardRef = useRef(null);
+  const notesRef = useRef(null);
+  const actionsRef = useRef(null);
+  const delayRef = useRef(null);
+  const productDelayRef = useRef(null);
+  const animRan = useRef(false);
+
+  useEffect(() => {
+    loadNextCode();
+    if (type === 'proforma') {
+      const d = new Date();
+      d.setDate(d.getDate() + 14);
+      setValidityDate(d.toISOString().split('T')[0]);
+    } else {
+      setValidityDate('');
+    }
+  }, [type]);
+
+  useEffect(() => { recalcTotals(); }, [items, amountPaid]);
+
+  useEffect(() => {
+    if (delayRef.current) clearTimeout(delayRef.current);
+    if (customerSearch.length >= 2) {
+      delayRef.current = setTimeout(async () => {
+        try {
+          const res = await customersAPI.search(customerSearch);
+          setCustomerResults(res.data.data);
+          setShowCustomerDropdown(true);
+        } catch {}
+      }, 400);
+    } else {
+      setCustomerResults([]);
+      setShowCustomerDropdown(false);
+    }
+    return () => { if (delayRef.current) clearTimeout(delayRef.current); };
+  }, [customerSearch]);
+
+  // Invoice search debounce
+  const invoiceDelayRef = useRef(null);
+  useEffect(() => {
+    if (invoiceDelayRef.current) clearTimeout(invoiceDelayRef.current);
+    if (invoiceSearch.length >= 2) {
+      setInvoiceSearchLoading(true);
+      invoiceDelayRef.current = setTimeout(async () => {
+        try {
+          const res = await invoicesAPI.list({ search: invoiceSearch, limit: 10 });
+          setInvoiceResults(res.data.data);
+          setShowInvoiceDropdown(res.data.data.length > 0);
+        } catch (e) { setInvoiceResults([]); setShowInvoiceDropdown(false); console.warn('Invoice search error:', e?.response?.status, e?.message); }
+        finally { setInvoiceSearchLoading(false); }
+      }, 400);
+    } else {
+      setInvoiceResults([]);
+      setShowInvoiceDropdown(false);
+      setInvoiceSearchLoading(false);
+    }
+    return () => { if (invoiceDelayRef.current) clearTimeout(invoiceDelayRef.current); };
+  }, [invoiceSearch]);
+
+  useEffect(() => {
+    if (animRan.current) return;
+    animRan.current = true;
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+      tl.from(headerRef.current, { y: -20, opacity: 0, duration: 0.4 });
+      tl.from([invoiceSearchCardRef.current, detailsCardRef.current, itemsCardRef.current, notesRef.current].filter(Boolean),
+        { y: 20, opacity: 0, duration: 0.35, stagger: 0.06 }, '-=0.1');
+      tl.from([summaryCardRef.current, bankCardRef.current, actionsRef.current].filter(Boolean),
+        { y: 20, opacity: 0, duration: 0.35, stagger: 0.06 }, '-=0.2');
+    }, containerRef);
+    return () => ctx.revert();
+  }, []);
+
+  const loadNextCode = async () => {
+    try {
+      const res = await invoicesAPI.nextCode(type);
+      setInvoiceCode(res.data.code);
+    } catch { setInvoiceCode('NGV-2026-000001'); }
+  };
+
+  const selectInvoice = async (inv) => {
+    try {
+      setSaving(true);
+      const res = await invoicesAPI.get(inv._id);
+      const data = res.data.data;
+      setType(data.type);
+      setDate(new Date(data.date).toISOString().split('T')[0]);
+      if (data.validityDate) setValidityDate(new Date(data.validityDate).toISOString().split('T')[0]);
+      setCustomer(data.customer || null);
+      setCustomerName(data.customerSnapshot?.name || '');
+      setCustomerTelephone(data.customerSnapshot?.telephone || '');
+      setCustomerEmail(data.customerSnapshot?.email || '');
+      setCustomerAddress(data.customerSnapshot?.address || '');
+      setBillTo(data.billTo || '');
+      setCustomerSearch(data.customerSnapshot?.name || '');
+      setItems(data.items.map(item => ({
+        description: item.description,
+        quantity: item.quantity,
+        unit: item.unit || 'pcs',
+        unitPrice: item.unitPrice,
+        product: item.product?._id || item.product || null,
+        roll: item.roll?._id || item.roll || null,
+        rollId: item.rollId || '',
+      })));
+      setNotes(data.notes || '');
+      setAmountPaid(data.amountPaid || 0);
+      setLoadedFrom({ code: data.invoiceCode, id: data._id });
+      setInvoiceSearch('');
+      setShowInvoiceDropdown(false);
+      toast.success(`Loaded invoice ${data.invoiceCode}`);
+    } catch (err) {
+      toast.error('Failed to load invoice details.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const recalcTotals = () => {
+    const s = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    setSubtotal(s);
+    setGrandTotal(s);
+    const bd = Math.max(0, s - amountPaid);
+    setBalanceDue(bd);
+    if (amountPaid >= s) setPaymentStatus('paid');
+    else if (amountPaid > 0) setPaymentStatus('part_payment');
+    else setPaymentStatus('unpaid');
+  };
+
+  const addItem = () => setItems([...items, { description: '', quantity: 1, unit: 'pcs', unitPrice: 0, product: null, roll: null, rollId: '' }]);
+  const removeItem = (index) => { if (items.length > 1) setItems(items.filter((_, i) => i !== index)); };
+  const updateItem = (index, field, value) => {
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setItems(newItems);
+  };
+
+  const selectCustomer = (c) => {
+    setCustomer(c);
+    setCustomerName(c.name);
+    setCustomerTelephone(c.telephone || '');
+    setCustomerEmail(c.email || '');
+    setCustomerAddress(c.address || '');
+    setBillTo(c.name);
+    setCustomerSearch(c.name);
+    setShowCustomerDropdown(false);
+  };
+
+  const searchProducts = (query, index) => {
+    setProductSearch(query);
+    if (productDelayRef.current) clearTimeout(productDelayRef.current);
+    if (query.length >= 1) {
+      productDelayRef.current = setTimeout(async () => {
+        try {
+          const res = await productsAPI.list({ search: query, limit: 10 });
+          setProductResults(res.data.data);
+          setShowProductDropdown(index);
+        } catch {}
+      }, 300);
+    } else {
+      setProductResults([]);
+      setShowProductDropdown(null);
+    }
+  };
+
+  const selectProduct = async (product, index) => {
+    const newItems = [...items];
+    newItems[index] = {
+      ...newItems[index],
+      description: `${product.name}${product.sku ? ` (${product.sku})` : ''}`,
+      unitPrice: user?.role === 'cashier' ? (product.prices?.selling || 0) : (product.prices?.selling || 0),
+      unit: product.unit || 'pcs',
+      product: product._id,
+      roll: null,
+      rollId: '',
+    };
+    setItems(newItems);
+    setShowProductDropdown(null);
+    if (product.hasRollTracking) {
+      try {
+        const res = await rollsAPI.getActiveByProduct(product._id);
+        setActiveRolls(prev => ({ ...prev, [index]: res.data.data }));
+      } catch {}
+    }
+  };
+
+  const selectRoll = (index, roll) => {
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], roll: roll._id, rollId: roll.rollId };
+    setItems(newItems);
+  };
+
+  const openCalculator = (index) => {
+    setCalcItemIndex(index);
+    setCalcYards('');
+    setCalcLength('');
+    setCalcWidth('');
+    setShowCalcPopover(true);
+  };
+
+  const applyCalculator = () => {
+    if (calcItemIndex === null) return;
+    const newItems = [...items];
+    const item = newItems[calcItemIndex];
+    if (calcYards) {
+      const meters = parseFloat(calcYards) * 0.9144;
+      item.quantity = Math.round(meters * 100) / 100;
+      item.unit = 'meters';
+    } else if (calcLength && calcWidth) {
+      const sqm = parseFloat(calcLength) * parseFloat(calcWidth);
+      item.quantity = Math.round(sqm * 100) / 100;
+      item.unit = 'sqm';
+    }
+    setItems(newItems);
+    setShowCalcPopover(false);
+    toast.success('Measurement applied to quantity.');
+  };
+
+  const handleSubmit = async (action) => {
+    if (items.some(i => !i.description || i.quantity <= 0 || i.unitPrice <= 0)) {
+      toast.error('Please fill in all line item fields with valid values.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = {
+        type, invoiceCode, date,
+        validityDate: validityDate || undefined,
+        customer: customer?._id,
+        billTo: billTo || customerName,
+        customerSnapshot: {
+          name: customerName || 'Walk-in Customer',
+          telephone: customerTelephone,
+          email: customerEmail,
+          address: customerAddress,
+        },
+        items: items.map(item => ({
+          description: item.description, quantity: item.quantity, unit: item.unit,
+          unitPrice: item.unitPrice, total: item.quantity * item.unitPrice,
+          product: item.product, roll: item.roll, rollId: item.rollId,
+        })),
+        subtotal,
+        amountPaid: type === 'cash_sales' ? amountPaid : 0,
+        grandTotal, balanceDue, paymentStatus, notes,
+      };
+      const res = await invoicesAPI.create(payload);
+      const invoice = res.data.data;
+      if (type === 'cash_sales' && amountPaid > 0) {
+        await invoicesAPI.commit(invoice._id, { amountPaid });
+      }
+      toast.success(`${type === 'cash_sales' ? 'Cash Sales' : 'Proforma'} Invoice created successfully!`);
+      router.push(`/invoices/${invoice._id}`);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to create invoice.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cardClass = 'rounded-3xl overflow-hidden';
+  const cardStyle = {
+    backgroundColor: 'var(--bg-secondary)',
+    border: '1px solid var(--border-primary)',
+    boxShadow: 'var(--shadow-lg)',
+  };
+  const cardHeaderClass = 'px-6 py-4 border-b';
+  const cardHeaderBorder = { borderColor: 'var(--border-primary)' };
+  const cardTitleClass = 'text-xs font-black tracking-wider';
+  const cardTitleStyle = { color: 'var(--text-primary)' };
+
+  return (
+    <div ref={containerRef} className="font-lufga">
+      {/* Header */}
+      <div ref={headerRef} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+        <div>
+          <div className="flex items-center gap-3 mb-3">
+            <button onClick={() => router.push('/invoices')}
+              className="flex items-center gap-1.5 text-xs font-semibold transition-colors group"
+              style={{ color: 'var(--text-muted)' }}>
+              <HiOutlineArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
+              Back to invoices
+            </button>
+            </div>
+          <h1 className="text-2xl font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            {type === 'proforma' ? 'New Proforma Invoice' : 'New Cash Sales Invoice'}
+          </h1>
+          <p className="text-sm font-medium mt-1 flex items-center gap-2 flex-wrap" style={{ color: 'var(--text-muted)' }}>
+            <span>{invoiceCode}</span>
+            <span>·</span>
+            <span>{new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            {loadedFrom && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold"
+                style={{ backgroundColor: 'var(--ngv-active-bg)', color: 'var(--ngv-active-text)' }}>
+                Based on: {loadedFrom.code}
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 p-1 rounded-2xl" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+            <button onClick={() => { setType('proforma'); setAmountPaid(0); setLoadedFrom(null); }}
+              className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200"
+              style={{
+                backgroundColor: type === 'proforma' ? 'var(--bg-secondary)' : 'transparent',
+                color: type === 'proforma' ? 'var(--text-primary)' : 'var(--text-muted)',
+                boxShadow: type === 'proforma' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+              }}>
+              <HiOutlineDocumentText className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+              Proforma
+            </button>
+            <button onClick={() => { setType('cash_sales'); setValidityDate(''); setLoadedFrom(null); }}
+              className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200"
+              style={{
+                backgroundColor: type === 'cash_sales' ? 'var(--bg-secondary)' : 'transparent',
+                color: type === 'cash_sales' ? 'var(--text-primary)' : 'var(--text-muted)',
+                boxShadow: type === 'cash_sales' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+              }}>
+              <HiOutlineCurrencyDollar className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+              Cash Sales
+            </button>
+        </div>
+      </div>
+
+      {/* Main layout */}
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+        {/* Left column */}
+        <div className="xl:col-span-3 space-y-6">
+          {/* Invoice Search - Load existing invoice */}
+          <div ref={invoiceSearchCardRef} className={`${cardClass} overflow-visible`} style={cardStyle}>
+            <div className={cardHeaderClass} style={cardHeaderBorder}>
+              <h3 className={cardTitleClass} style={cardTitleStyle}>LOAD EXISTING INVOICE</h3>
+            </div>
+            <div className="p-6">
+              <div className="relative">
+                <input type="text" value={invoiceSearch}
+                  onChange={(e) => setInvoiceSearch(e.target.value)}
+                  onFocus={() => invoiceResults.length > 0 && setShowInvoiceDropdown(true)}
+                  placeholder="Search by invoice code, customer name or phone..."
+                  className="ngv-input h-11 pl-10 text-sm" />
+                <HiOutlineMagnifyingGlass className="absolute left-3 top-3.5 w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                {invoiceSearchLoading && (
+                  <span className="absolute right-3 top-3">
+                    <span className="w-4 h-4 border-2 rounded-full inline-block animate-spin" style={{ borderColor: 'var(--border-secondary)', borderTopColor: '#166534' }} />
+                  </span>
+                )}
+                {showInvoiceDropdown && invoiceResults.length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full rounded-2xl overflow-hidden max-h-64 overflow-y-auto"
+                    style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}>
+                    {invoiceResults.map(inv => (
+                      <button key={inv._id} onClick={() => selectInvoice(inv)}
+                        className="w-full px-4 py-3 text-left flex items-center justify-between transition-colors"
+                        style={{ color: 'var(--text-primary)' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono font-black tracking-tight" style={{ color: '#166534' }}>{inv.invoiceCode}</span>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                              inv.type === 'cash_sales' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+                            }`}>{inv.type === 'cash_sales' ? 'CSH' : 'PRO'}</span>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                              inv.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' :
+                              inv.paymentStatus === 'part_payment' ? 'bg-amber-100 text-amber-700' :
+                              'bg-gray-100 text-gray-600'
+                            }`}>{inv.paymentStatus?.replace('_', ' ')}</span>
+                          </div>
+                          <p className="text-xs font-medium truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                            {inv.customerSnapshot?.name || inv.billTo || 'Walk-in'}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0 ml-3">
+                          <p className="text-xs font-black" style={{ color: 'var(--text-primary)' }}>₦{inv.grandTotal?.toLocaleString()}</p>
+                          <p className="text-[9px] font-medium" style={{ color: 'var(--text-muted)' }}>
+                            {new Date(inv.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {invoiceSearch.length >= 2 && !invoiceSearchLoading && invoiceResults.length === 0 && (
+                  <p className="text-xs font-medium mt-1.5" style={{ color: 'var(--text-muted)' }}>No matching invoices found.</p>
+                )}
+              </div>
+              <p className="text-[10px] font-medium mt-2" style={{ color: 'var(--text-muted)' }}>
+                Search for an existing invoice to auto-fill this form with its details.
+              </p>
+            </div>
+          </div>
+
+          {/* Invoice Details */}
+          <div ref={detailsCardRef} className={`${cardClass} overflow-visible`} style={cardStyle}>
+            <div className={cardHeaderClass} style={cardHeaderBorder}>
+              <h3 className={cardTitleClass} style={cardTitleStyle}>INVOICE DETAILS</h3>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="field-group relative">
+                  <input type="date" id="inv-date" value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className={`peer ngv-input h-12 pt-4 text-sm ${date ? 'border-ngv-600' : ''}`}
+                    placeholder=" " />
+                  <label htmlFor="inv-date"
+                    className={`absolute left-4 transition-all duration-200 pointer-events-none ${
+                      date ? 'top-1 text-[10px] font-bold' : 'top-3.5 text-sm'
+                    } peer-focus:top-1 peer-focus:text-[10px] peer-focus:font-bold`}
+                    style={{ color: 'var(--text-muted)' }}>
+                    Invoice Date
+                  </label>
+                </div>
+                {type === 'proforma' && (
+                  <div className="field-group relative">
+                    <input type="date" id="val-date" value={validityDate} readOnly
+                      className="peer ngv-input h-12 pt-4 text-sm opacity-70"
+                      placeholder=" " />
+                    <label htmlFor="val-date"
+                      className="absolute left-4 top-1 text-[10px] font-bold pointer-events-none"
+                      style={{ color: 'var(--text-muted)' }}>
+                      Validity Date
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* Customer Search - Quick fill */}
+              <div className="relative">
+                <label className="text-[10px] font-bold tracking-wider uppercase mb-2 block" style={{ color: 'var(--text-muted)' }}>
+                  Search Existing Customer
+                </label>
+                <input type="text" value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  onFocus={() => customerResults.length > 0 && setShowCustomerDropdown(true)}
+                  placeholder="Search by name or telephone to auto-fill..."
+                  className="ngv-input h-11 pl-10 text-sm" />
+                <HiOutlineMagnifyingGlass className="absolute left-3 top-[39px] w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                {showCustomerDropdown && customerResults.length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full rounded-2xl overflow-hidden max-h-48 overflow-y-auto"
+                    style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}>
+                    {customerResults.map(c => (
+                      <button key={c._id} onClick={() => selectCustomer(c)}
+                        className="w-full px-4 py-3 text-left flex justify-between items-center transition-colors"
+                        style={{ color: 'var(--text-primary)' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                        <span className="text-sm font-semibold">{c.name}</span>
+                        <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{c.telephone}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Customer Details */}
+              <p className="text-[10px] font-bold tracking-wider uppercase mb-2" style={{ color: 'var(--text-muted)' }}>Customer Details</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="field-group relative col-span-2">
+                  <input type="text" id="cust-name" value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    className="peer ngv-input h-12 pt-4 text-sm" placeholder=" " />
+                  <label htmlFor="cust-name"
+                    className={`absolute left-4 transition-all duration-200 pointer-events-none ${customerName ? 'top-1 text-[10px] font-bold' : 'top-3.5 text-sm'} peer-focus:top-1 peer-focus:text-[10px] peer-focus:font-bold`}
+                    style={{ color: 'var(--text-muted)' }}>
+                    Client Name *
+                  </label>
+                </div>
+                <div className="field-group relative">
+                  <input type="tel" id="cust-tel" value={customerTelephone}
+                    onChange={(e) => setCustomerTelephone(e.target.value)}
+                    className="peer ngv-input h-12 pt-4 text-sm" placeholder=" " />
+                  <label htmlFor="cust-tel"
+                    className={`absolute left-4 transition-all duration-200 pointer-events-none ${customerTelephone ? 'top-1 text-[10px] font-bold' : 'top-3.5 text-sm'} peer-focus:top-1 peer-focus:text-[10px] peer-focus:font-bold`}
+                    style={{ color: 'var(--text-muted)' }}>
+                    Telephone
+                  </label>
+                </div>
+                <div className="field-group relative">
+                  <input type="email" id="cust-email" value={customerEmail}
+                    onChange={(e) => setCustomerEmail(e.target.value)}
+                    className="peer ngv-input h-12 pt-4 text-sm" placeholder=" " />
+                  <label htmlFor="cust-email"
+                    className={`absolute left-4 transition-all duration-200 pointer-events-none ${customerEmail ? 'top-1 text-[10px] font-bold' : 'top-3.5 text-sm'} peer-focus:top-1 peer-focus:text-[10px] peer-focus:font-bold`}
+                    style={{ color: 'var(--text-muted)' }}>
+                    Email
+                  </label>
+                </div>
+                <div className="field-group relative col-span-2">
+                  <input type="text" id="cust-addr" value={customerAddress}
+                    onChange={(e) => setCustomerAddress(e.target.value)}
+                    className="peer ngv-input h-12 pt-4 text-sm" placeholder=" " />
+                  <label htmlFor="cust-addr"
+                    className={`absolute left-4 transition-all duration-200 pointer-events-none ${customerAddress ? 'top-1 text-[10px] font-bold' : 'top-3.5 text-sm'} peer-focus:top-1 peer-focus:text-[10px] peer-focus:font-bold`}
+                    style={{ color: 'var(--text-muted)' }}>
+                    Address
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Line Items */}
+          <div ref={itemsCardRef} className={cardClass} style={cardStyle}>
+            <div className={`${cardHeaderClass} flex items-center justify-between`} style={cardHeaderBorder}>
+              <h3 className={cardTitleClass} style={cardTitleStyle}>LINE ITEMS</h3>
+              <button onClick={addItem}
+                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-[10px] font-bold transition-all duration-200"
+                style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--ngv-active-bg)'; e.currentTarget.style.color = 'var(--ngv-active-text)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+                <HiOutlinePlus className="w-3.5 h-3.5" />
+                Add Item
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" style={{ color: 'var(--text-primary)' }}>
+                <thead>
+                  <tr className="border-b" style={{ borderColor: 'var(--border-primary)' }}>
+                    <th className="text-left px-4 py-3 text-[10px] font-bold tracking-wider uppercase w-8" style={{ color: 'var(--text-muted)' }}>#</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-bold tracking-wider uppercase min-w-[180px]" style={{ color: 'var(--text-muted)' }}>Description</th>
+                    <th className="text-center px-4 py-3 text-[10px] font-bold tracking-wider uppercase w-16" style={{ color: 'var(--text-muted)' }}>Qty</th>
+                    <th className="text-center px-4 py-3 text-[10px] font-bold tracking-wider uppercase w-14" style={{ color: 'var(--text-muted)' }}>Unit</th>
+                    <th className="text-right px-4 py-3 text-[10px] font-bold tracking-wider uppercase w-28" style={{ color: 'var(--text-muted)' }}>Price</th>
+                    <th className="text-right px-4 py-3 text-[10px] font-bold tracking-wider uppercase w-24" style={{ color: 'var(--text-muted)' }}>Total</th>
+                    <th className="text-center px-4 py-3 text-[10px] font-bold tracking-wider uppercase w-20" style={{ color: 'var(--text-muted)' }}>Roll</th>
+                    <th className="w-12"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y" style={{ borderColor: 'var(--border-primary)' }}>
+                  {items.map((item, i) => (
+                    <tr key={i} className="transition-colors" style={{ backgroundColor: 'transparent' }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                      <td className="px-4 py-3 text-xs font-bold align-top pt-5" style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
+                      <td className="px-4 py-3">
+                        <div className="relative">
+                          <input type="text" value={item.description}
+                            onChange={(e) => { updateItem(i, 'description', e.target.value); searchProducts(e.target.value, i); }}
+                            placeholder="Search or type..."
+                            className="w-full bg-transparent text-sm font-medium outline-none py-1.5"
+                            style={{ color: 'var(--text-primary)' }} />
+                          {showProductDropdown === i && productResults.length > 0 && (
+                            <div className="absolute z-20 mt-1 left-0 right-0 rounded-2xl overflow-hidden max-h-48 overflow-y-auto"
+                              style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}>
+                              {productResults.map(p => (
+                                <button key={p._id} onClick={() => selectProduct(p, i)}
+                                  className="w-full px-3 py-2.5 text-left flex justify-between items-center transition-colors text-sm"
+                                  style={{ color: 'var(--text-primary)' }}
+                                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
+                                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                  <span className="font-semibold">{p.name}</span>
+                                  <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>₦{p.prices?.selling?.toLocaleString()}/{p.unit}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          <input type="number" value={item.quantity}
+                            onChange={(e) => updateItem(i, 'quantity', Math.max(0, parseFloat(e.target.value) || 0))}
+                            className="w-full bg-transparent text-sm font-bold text-center outline-none py-1.5" min="0" step="0.01"
+                            style={{ color: 'var(--text-primary)' }} />
+                          <button onClick={() => openCalculator(i)}
+                            className="p-1 rounded-md transition-colors shrink-0"
+                            style={{ color: 'var(--text-muted)' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+                            title="Measurement Calculator">
+                            <HiOutlineCalculator className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <select value={item.unit} onChange={(e) => updateItem(i, 'unit', e.target.value)}
+                          className="w-full bg-transparent text-xs font-bold text-center outline-none py-1.5"
+                          style={{ color: 'var(--text-secondary)' }}>
+                          <option value="pcs">pcs</option>
+                          <option value="meters">m</option>
+                          <option value="yards">yds</option>
+                          <option value="sqm">sqm</option>
+                          <option value="rolls">rolls</option>
+                          <option value="sets">sets</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-3">
+                        <input type="number" value={item.unitPrice}
+                          onChange={(e) => updateItem(i, 'unitPrice', Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="w-full bg-transparent text-sm font-bold text-right outline-none py-1.5" min="0" step="0.01"
+                          style={{ color: 'var(--text-primary)' }} />
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm font-black align-top pt-5" style={{ color: 'var(--text-primary)' }}>
+                        ₦{(item.quantity * item.unitPrice).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 align-top pt-4">
+                        {item.product && activeRolls[i]?.length > 0 ? (
+                          <select value={item.rollId}
+                            onChange={(e) => { const roll = activeRolls[i].find(r => r.rollId === e.target.value); selectRoll(i, roll || e.target.value); }}
+                            className="w-full bg-transparent text-[10px] font-bold outline-none py-1"
+                            style={{ color: 'var(--text-secondary)' }}>
+                            <option value="">Select</option>
+                            {activeRolls[i].map(r => (
+                              <option key={r._id} value={r.rollId}>{r.rollId}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>{item.rollId || '—'}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 align-top pt-4">
+                        {items.length > 1 && (
+                          <button onClick={() => removeItem(i)}
+                            className="p-1.5 rounded-xl transition-colors"
+                            style={{ color: 'var(--text-muted)' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#fef2f2'; e.currentTarget.style.color = '#ef4444'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                            <HiOutlineTrash className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div ref={notesRef}>
+            <div className={cardClass} style={cardStyle}>
+              <div className={cardHeaderClass} style={cardHeaderBorder}>
+                <h3 className={cardTitleClass} style={cardTitleStyle}>NOTES</h3>
+              </div>
+              <div className="p-6">
+                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Optional notes..."
+                  className="ngv-input resize-none h-20 text-sm" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right column */}
+        <div className="xl:col-span-2 space-y-6">
+          {/* Invoice Summary */}
+          <div ref={summaryCardRef} className={cardClass} style={cardStyle}>
+            <div className={cardHeaderClass} style={cardHeaderBorder}>
+              <h3 className={cardTitleClass} style={cardTitleStyle}>INVOICE SUMMARY</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex justify-between items-center py-1.5">
+                <span className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Subtotal</span>
+                <span className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>₦{subtotal.toLocaleString()}</span>
+              </div>
+              <div className="h-px" style={{ backgroundColor: 'var(--border-primary)' }} />
+              <div className="flex justify-between items-center py-1">
+                <span className="text-base font-black" style={{ color: 'var(--text-primary)' }}>Grand Total</span>
+                <span className="text-xl font-black" style={{ color: '#166534' }}>₦{grandTotal.toLocaleString()}</span>
+              </div>
+
+              {/* Cash Sales payment section */}
+              {type === 'cash_sales' && (
+                <div className="pt-3 space-y-3 border-t" style={{ borderColor: 'var(--border-primary)' }}>
+                  <p className="text-[10px] font-bold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>Payment</p>
+                  <div className="field-group relative">
+                    <input type="number" id="amt-paid" value={amountPaid}
+                      onChange={(e) => setAmountPaid(Math.max(0, parseFloat(e.target.value) || 0))}
+                      className="peer ngv-input h-12 pt-4 text-lg font-black" placeholder=" " min="0" />
+                    <label htmlFor="amt-paid"
+                      className={`absolute left-4 transition-all duration-200 pointer-events-none ${
+                        amountPaid > 0 ? 'top-0.5 text-[9px] font-bold' : 'top-3.5 text-sm'
+                      } peer-focus:top-0.5 peer-focus:text-[9px] peer-focus:font-bold`}
+                      style={{ color: 'var(--text-muted)' }}>
+                      Amount Paid (₦)
+                    </label>
+                  </div>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-sm font-bold" style={{ color: 'var(--text-muted)' }}>Balance Due</span>
+                    <span className={`text-lg font-black ${balanceDue > 0 ? 'text-red-600' : ''}`}
+                      style={{ color: balanceDue > 0 ? '' : '#166534' }}>
+                      ₦{balanceDue.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Status:</span>
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg ${
+                      paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-800' :
+                      paymentStatus === 'part_payment' ? 'bg-amber-100 text-amber-800' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      {paymentStatus.replace('_', ' ')}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bank Details */}
+          {type === 'proforma' && (
+            <div ref={bankCardRef} className={cardClass} style={cardStyle}>
+              <div className={cardHeaderClass} style={cardHeaderBorder}>
+                <h3 className={cardTitleClass} style={cardTitleStyle}>
+                  <HiOutlineBanknotes className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+                  BANK DETAILS
+                </h3>
+              </div>
+              <div className="p-6 space-y-3">
+                {[
+                  { label: 'Account', value: '2284429344 - Nzelu Akachukwu (Zenith Bank)' },
+                ].map((row) => (
+                  <div key={row.label} className="flex justify-between items-center py-1.5">
+                    <span className="text-[10px] font-bold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>{row.label}</span>
+                    <span className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>{row.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div ref={actionsRef} className="space-y-3 pt-1">
+            <button onClick={() => handleSubmit('save')} disabled={saving}
+              className="w-full h-12 rounded-2xl text-sm font-bold text-white transition-all duration-200 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--ngv-active-bg)' }}
+              onMouseEnter={(e) => { if (!saving) e.currentTarget.style.opacity = '0.9'; }}
+              onMouseLeave={(e) => { if (!saving) e.currentTarget.style.opacity = '1'; }}>
+              {saving ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Saving...
+                </span>
+              ) : (
+                <span className="flex items-center justify-center gap-2">
+                  <HiOutlineCheck className="w-4 h-4" />
+                  {type === 'cash_sales' ? 'Create Cash Sales Invoice' : 'Create Proforma Invoice'}
+                </span>
+              )}
+            </button>
+            <button onClick={() => router.push('/invoices')}
+              className="w-full h-12 rounded-2xl text-sm font-bold transition-all duration-200"
+              style={{ color: 'var(--text-secondary)', backgroundColor: 'var(--bg-tertiary)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.8'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Measurement Calculator Modal */}
+      {showCalcPopover && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+          onClick={() => setShowCalcPopover(false)}>
+          <div className="rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+            style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-primary)' }}
+            onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h4 className="text-sm font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                <HiOutlineCalculator className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+                Measurement Calculator
+              </h4>
+              <button onClick={() => setShowCalcPopover(false)} className="p-1.5 rounded-xl transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}>
+                <HiOutlineXMark className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold tracking-wider uppercase mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Yards → Meters</label>
+                <input type="number" value={calcYards}
+                  onChange={(e) => { setCalcYards(e.target.value); setCalcLength(''); setCalcWidth(''); }}
+                  placeholder="Enter yards" className="ngv-input h-11 text-sm" />
+                {calcYards && <p className="text-xs font-medium mt-1" style={{ color: 'var(--text-muted)' }}>= {(parseFloat(calcYards) * 0.9144).toFixed(3)} meters</p>}
+              </div>
+              <div className="h-px" style={{ backgroundColor: 'var(--border-primary)' }} />
+              <p className="text-[10px] font-bold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>Length × Width</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="field-group relative">
+                  <input type="number" id="calc-len" value={calcLength}
+                    onChange={(e) => { setCalcLength(e.target.value); setCalcYards(''); }}
+                    className="peer ngv-input h-11 pt-4 text-sm" placeholder=" " />
+                  <label htmlFor="calc-len"
+                    className={`absolute left-4 transition-all duration-200 pointer-events-none ${
+                      calcLength ? 'top-0.5 text-[9px] font-bold' : 'top-3 text-xs'
+                    } peer-focus:top-0.5 peer-focus:text-[9px] peer-focus:font-bold`}
+                    style={{ color: 'var(--text-muted)' }}>
+                    Length (m)
+                  </label>
+                </div>
+                <div className="field-group relative">
+                  <input type="number" id="calc-wid" value={calcWidth}
+                    onChange={(e) => { setCalcWidth(e.target.value); setCalcYards(''); }}
+                    className="peer ngv-input h-11 pt-4 text-sm" placeholder=" " />
+                  <label htmlFor="calc-wid"
+                    className={`absolute left-4 transition-all duration-200 pointer-events-none ${
+                      calcWidth ? 'top-0.5 text-[9px] font-bold' : 'top-3 text-xs'
+                    } peer-focus:top-0.5 peer-focus:text-[9px] peer-focus:font-bold`}
+                    style={{ color: 'var(--text-muted)' }}>
+                    Width (m)
+                  </label>
+                </div>
+              </div>
+              {calcLength && calcWidth && (
+                <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>= {(parseFloat(calcLength) * parseFloat(calcWidth)).toFixed(3)} sqm</p>
+              )}
+              <button onClick={applyCalculator} disabled={!calcYards && (!calcLength || !calcWidth)}
+                className="w-full h-11 rounded-xl text-sm font-bold text-white transition-all duration-200 disabled:opacity-40"
+                style={{ backgroundColor: 'var(--ngv-active-bg)' }}>
+                Apply to Quantity
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
