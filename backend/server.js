@@ -47,7 +47,19 @@ const authLimiter = rateLimit({
 });
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      process.env.FRONTEND_URL,
+      'http://localhost:3000',
+    ].filter(Boolean);
+
+    // Allow Vercel deployment URLs (*.vercel.app) and any custom domain set in env
+    if (!origin || allowedOrigins.includes(origin) || /\.vercel\.app$/.test(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: '50mb' }));
