@@ -15,8 +15,8 @@ export default function StandardSalesInvoicePrint({ invoice }) {
   const paid = invoice.paymentStatus === 'paid';
   const partPayment = invoice.paymentStatus === 'part_payment';
   const unpaid = invoice.paymentStatus === 'unpaid';
-  const supplied = invoice.status === 'paid' || invoice.status === 'part_payment';
-  const notSupplied = !supplied && invoice.status !== 'cancelled';
+  const supplied = invoice.isSupplied;
+  const notSupplied = !invoice.isSupplied;
 
   return (
     <div className="print-body">
@@ -146,7 +146,7 @@ export default function StandardSalesInvoicePrint({ invoice }) {
             <ul style={{ margin: '4px 0 0 0', paddingLeft: 14, lineHeight: 1.7 }}>
               <li>Ownership of goods remains with NGV Enterprise until full payment is received.</li>
               <li>All measurements must be verified onsite before installation. Nzelu Global Ventures is not liable for site-measurement discrepancies.</li>
-              <li>Delivery timelines commence after 70% mobilization deposit confirmation.</li>
+              <li>Delivery timelines commence after deposit confirmation.</li>
               <li>Custom-cut materials are non-returnable and non-refundable.</li>
               <li>Claims for damages must be reported within 48 hours of delivery.</li>
             </ul>

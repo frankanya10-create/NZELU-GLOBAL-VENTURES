@@ -34,7 +34,6 @@ export default function NewInvoicePage() {
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerTelephone, setCustomerTelephone] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   const [items, setItems] = useState([{ description: '', quantity: '', unit: 'pcs', unitPrice: '', product: null, roll: null, rollId: '' }]);
   const [subtotal, setSubtotal] = useState(0);
@@ -43,6 +42,8 @@ export default function NewInvoicePage() {
   const [grandTotal, setGrandTotal] = useState(0);
   const [balanceDue, setBalanceDue] = useState(0);
   const [paymentStatus, setPaymentStatus] = useState('unpaid');
+  const [depositPercent, setDepositPercent] = useState(70);
+  const [isSupplied, setIsSupplied] = useState(false);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -155,7 +156,6 @@ export default function NewInvoicePage() {
       setCustomer(data.customer || null);
       setCustomerName(data.customerSnapshot?.name || '');
       setCustomerTelephone(data.customerSnapshot?.telephone || '');
-      setCustomerEmail(data.customerSnapshot?.email || '');
       setCustomerAddress(data.customerSnapshot?.address || '');
       setBillTo(data.billTo || '');
       setCustomerSearch(data.customerSnapshot?.name || '');
@@ -168,6 +168,9 @@ export default function NewInvoicePage() {
         roll: item.roll?._id || item.roll || null,
         rollId: item.rollId || '',
       })));
+      setDepositPercent(data.depositPercent || 70);
+      setIsSupplied(data.isSupplied || false);
+      setPaymentStatus(data.paymentStatus || 'unpaid');
       setNotes(data.notes || '');
       setAmountPaid(data.amountPaid || 0);
       setLoadedFrom({ code: data.invoiceCode, id: data._id });
@@ -204,7 +207,6 @@ export default function NewInvoicePage() {
     setCustomer(c);
     setCustomerName(c.name);
     setCustomerTelephone(c.telephone || '');
-    setCustomerEmail(c.email || '');
     setCustomerAddress(c.address || '');
     setBillTo(c.name);
     setCustomerSearch(c.name);
@@ -270,7 +272,6 @@ export default function NewInvoicePage() {
         customerSnapshot: {
           name: customerName || 'Walk-in Customer',
           telephone: customerTelephone,
-          email: customerEmail,
           address: customerAddress,
         },
         items: items.map(item => ({
@@ -279,6 +280,8 @@ export default function NewInvoicePage() {
           product: item.product, roll: item.roll, rollId: item.rollId,
         })),
         subtotal,
+        depositPercent: type === 'proforma' ? depositPercent : undefined,
+        isSupplied,
         amountPaid: type === 'cash_sales' ? amountPaid : 0,
         grandTotal, balanceDue, paymentStatus, notes,
       };
@@ -336,7 +339,7 @@ export default function NewInvoicePage() {
           </p>
         </div>
         <div className="flex items-center gap-2 p-1 rounded-2xl" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
-            <button onClick={() => { setType('proforma'); setAmountPaid(0); setLoadedFrom(null); }}
+            <button onClick={() => { setType('proforma'); setAmountPaid(0); setLoadedFrom(null); setDepositPercent(70); setIsSupplied(false); setPaymentStatus('unpaid'); }}
               className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200"
               style={{
                 backgroundColor: type === 'proforma' ? 'var(--bg-secondary)' : 'transparent',
@@ -346,7 +349,7 @@ export default function NewInvoicePage() {
               <HiOutlineDocumentText className="w-4 h-4 inline mr-1.5 -mt-0.5" />
               Proforma
             </button>
-            <button onClick={() => { setType('cash_sales'); setValidityDate(''); setLoadedFrom(null); }}
+            <button onClick={() => { setType('cash_sales'); setValidityDate(''); setLoadedFrom(null); setIsSupplied(false); setPaymentStatus('unpaid'); }}
               className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200"
               style={{
                 backgroundColor: type === 'cash_sales' ? 'var(--bg-secondary)' : 'transparent',
@@ -511,16 +514,6 @@ export default function NewInvoicePage() {
                     Telephone
                   </label>
                 </div>
-                <div className="field-group relative">
-                  <input type="email" id="cust-email" value={customerEmail}
-                    onChange={(e) => setCustomerEmail(e.target.value)}
-                    className="peer ngv-input h-12 pt-4 text-sm" placeholder=" " />
-                  <label htmlFor="cust-email"
-                    className={`absolute left-4 transition-all duration-200 pointer-events-none ${customerEmail ? 'top-1 text-[10px] font-bold' : 'top-3.5 text-sm'} peer-focus:top-1 peer-focus:text-[10px] peer-focus:font-bold`}
-                    style={{ color: 'var(--text-muted)' }}>
-                    Email
-                  </label>
-                </div>
                 <div className="field-group relative col-span-2">
                   <input type="text" id="cust-addr" value={customerAddress}
                     onChange={(e) => setCustomerAddress(e.target.value)}
@@ -681,6 +674,39 @@ export default function NewInvoicePage() {
                 <span className="text-base font-black" style={{ color: 'var(--text-primary)' }}>Grand Total</span>
                 <span className="text-xl font-black" style={{ color: '#166534' }}>₦{grandTotal.toLocaleString()}</span>
               </div>
+
+              {/* Proforma status section */}
+              {type === 'proforma' && (
+                <div className="pt-3 space-y-3 border-t" style={{ borderColor: 'var(--border-primary)' }}>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold tracking-wider uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Deposit %</label>
+                      <select value={depositPercent} onChange={(e) => setDepositPercent(parseInt(e.target.value))}
+                        className="ngv-select h-10 text-sm">
+                        <option value={50}>50%</option>
+                        <option value={70}>70%</option>
+                        <option value={100}>100%</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold tracking-wider uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Payment</label>
+                      <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)}
+                        className="ngv-select h-10 text-sm">
+                        <option value="unpaid">Unpaid</option>
+                        <option value="part_payment">Part Payment</option>
+                        <option value="paid">Paid</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Supplied</span>
+                    <button onClick={() => setIsSupplied(!isSupplied)}
+                      className={`relative w-11 h-6 rounded-full transition-colors ${isSupplied ? 'bg-ngv-700' : 'bg-gray-300'}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isSupplied ? 'translate-x-5' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Cash Sales payment section */}
               {type === 'cash_sales' && (

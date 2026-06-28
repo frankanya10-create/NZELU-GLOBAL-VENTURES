@@ -183,19 +183,19 @@ export default function DashboardContent() {
           </div>
         </div>
 
-        {/* Top Customers */}
+        {/* Top Products */}
         <div className="rounded-3xl overflow-hidden" style={{
           backgroundColor: 'var(--bg-secondary)',
           border: '1px solid var(--border-primary)',
         }}>
           <div className="px-6 py-4 border-b" style={{ borderColor: 'var(--border-primary)' }}>
-            <h3 className="text-sm font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>TOP CUSTOMERS</h3>
+            <h3 className="text-sm font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>TOP PRODUCTS</h3>
           </div>
           <div className="p-4">
-            {data.topCustomers?.some(c => (c.totalPurchases || 0) > 0) ? (
+            {data.topProducts?.length > 0 ? (
               <div className="space-y-1">
-                {data.topCustomers.filter(c => (c.totalPurchases || 0) > 0).map((c, i) => (
-                  <div key={c._id}
+                {data.topProducts.map((p, i) => (
+                  <div key={p._id}
                     className="flex items-center justify-between p-3 rounded-xl transition-colors"
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -206,18 +206,18 @@ export default function DashboardContent() {
                         {i + 1}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{c.name}</p>
-                        <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{c.telephone || 'No phone'}</p>
+                        <p className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{p.name || 'Unknown Product'}</p>
+                        <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{p.sku || ''} · Qty: {p.totalQty || 0} {p.unit || 'pcs'}</p>
                       </div>
                     </div>
                     <p className="text-sm font-black shrink-0 ml-3" style={{ color: 'var(--text-primary)' }}>
-                      ₦{c.totalPurchases?.toLocaleString()}
+                      ₦{(p.totalAmount || 0).toLocaleString()}
                     </p>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-center py-10 text-sm font-medium" style={{ color: 'var(--text-muted)' }}>No customer data yet</p>
+              <p className="text-center py-10 text-sm font-medium" style={{ color: 'var(--text-muted)' }}>No product sales data yet</p>
             )}
           </div>
         </div>

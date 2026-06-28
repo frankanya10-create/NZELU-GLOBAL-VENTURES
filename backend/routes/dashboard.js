@@ -71,10 +71,17 @@ router.get('/summary', async (req, res) => {
         .limit(5)
         .populate('customer', 'name telephone')
         .populate('createdBy', 'name'),
-      Customer.find({ isActive: true })
-        .sort({ totalPurchases: -1 })
-        .limit(5)
-        .select('name telephone totalPurchases'),
+      Invoice.aggregate([
+        { $match: { ...filter, 'items.product': { $ne: null } } },
+        { $unwind: '$items' },
+        { $match: { 'items.product': { $ne: null } } },
+        { $group: { _id: '$items.product', totalQty: { $sum: '$items.quantity' }, totalAmount: { $sum: '$items.total' }, count: { $sum: 1 } } },
+        { $sort: { totalAmount: -1 } },
+        { $limit: 5 },
+        { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'product' } },
+        { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+        { $project: { name: '$product.name', sku: '$product.sku', unit: '$product.unit', totalQty: 1, totalAmount: 1, count: 1 } },
+      ]),
     ]);
 
     const data = {
@@ -93,7 +100,7 @@ router.get('/summary', async (req, res) => {
       lowStockProducts: lowStockProducts[0]?.count || 0,
       monthlyExpenses: totalExpenses[0]?.total || 0,
       recentInvoices,
-      topCustomers,
+      topProducts,
     };
 
     if (role === 'administrator' || role === 'manager') {

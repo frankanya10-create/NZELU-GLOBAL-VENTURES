@@ -18,9 +18,7 @@ export default function BankDetails() {
             <span className="text-surface-600">Account Number:</span>
             <span className="font-mono font-bold text-ngv-800">803 123 4567</span>
           </div>
-          <div className="mt-3 pt-3 border-t border-ngv-200 text-xs text-surface-500">
-            <p>All proforma invoices require a 50% mobilization deposit before production begins.</p>
-          </div>
+          
         </div>
       </div>
     </div>

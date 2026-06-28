@@ -114,6 +114,16 @@ const invoiceSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Branch',
   },
+  depositPercent: {
+    type: Number,
+    default: 70,
+    min: 0,
+    max: 100,
+  },
+  isSupplied: {
+    type: Boolean,
+    default: false,
+  },
   notes: {
     type: String,
     trim: true,
