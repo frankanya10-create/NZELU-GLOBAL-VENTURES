@@ -154,14 +154,16 @@ invoiceSchema.pre('save', function(next) {
     this.grandTotal = this.subtotal;
     this.balanceDue = this.grandTotal - this.amountPaid;
 
-    if (this.amountPaid >= this.grandTotal) {
-      this.paymentStatus = 'paid';
-      if (this.type === 'cash_sales') this.status = 'paid';
-    } else if (this.amountPaid > 0 && this.amountPaid < this.grandTotal) {
-      this.paymentStatus = 'part_payment';
-      this.status = 'part_payment';
-    } else {
-      this.paymentStatus = 'unpaid';
+    if (this.type === 'cash_sales' || !this.paymentStatus) {
+      if (this.amountPaid >= this.grandTotal) {
+        this.paymentStatus = 'paid';
+        if (this.type === 'cash_sales') this.status = 'paid';
+      } else if (this.amountPaid > 0 && this.amountPaid < this.grandTotal) {
+        this.paymentStatus = 'part_payment';
+        this.status = 'part_payment';
+      } else {
+        this.paymentStatus = 'unpaid';
+      }
     }
   }
   next();

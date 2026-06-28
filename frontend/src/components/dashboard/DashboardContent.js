@@ -90,7 +90,7 @@ export default function DashboardContent() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {statCards.map((card, i) => {
           const Icon = card.icon;
-          const value = data[card.key] ?? 0;
+          const value = data?.[card.key] ?? 0;
           const formatted = card.prefix
             ? `${card.prefix}${Number(value).toLocaleString()}`
             : Number(value).toLocaleString();
@@ -134,10 +134,10 @@ export default function DashboardContent() {
         })}
       </div>
 
-      {/* Recent Invoices + Top Customers */}
+      {/* Recent Invoices */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Invoices */}
-        <div className="rounded-3xl overflow-hidden" style={{
+        <div className="lg:col-span-2 rounded-3xl overflow-hidden" style={{
           backgroundColor: 'var(--bg-secondary)',
           border: '1px solid var(--border-primary)',
         }}>
@@ -149,10 +149,10 @@ export default function DashboardContent() {
             </Link>
           </div>
           <div className="p-4">
-            {data.recentInvoices?.length > 0 ? (
+            {data?.recentInvoices?.length > 0 ? (
               <div className="space-y-1">
-                {data.recentInvoices.slice(0, 5).map((inv) => (
-                  <Link key={inv._id} href={`/invoices/${inv._id}`}
+                {data.recentInvoices?.slice(0, 5).map((inv) => (
+                  <Link key={inv._id} href={'/invoices/' + inv._id}
                     className="flex items-center justify-between p-3 rounded-xl transition-colors"
                     style={{ color: 'var(--text-primary)' }}
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
@@ -166,11 +166,11 @@ export default function DashboardContent() {
                     </div>
                     <div className="text-right ml-3 shrink-0">
                       <p className="text-sm font-black">₦{inv.grandTotal?.toLocaleString()}</p>
-                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-md mt-0.5 ${
+                      <span className={'inline-block text-[10px] font-bold px-2 py-0.5 rounded-md mt-0.5 ' + (
                         inv.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-800' :
                         inv.paymentStatus === 'part_payment' ? 'bg-amber-100 text-amber-800' :
                         'bg-gray-100 text-gray-600'
-                      }`}>
+                      )}>
                         {inv.paymentStatus?.replace('_', ' ')}
                       </span>
                     </div>
@@ -179,45 +179,6 @@ export default function DashboardContent() {
               </div>
             ) : (
               <p className="text-center py-10 text-sm font-medium" style={{ color: 'var(--text-muted)' }}>No recent invoices</p>
-            )}
-          </div>
-        </div>
-
-        {/* Top Products */}
-        <div className="rounded-3xl overflow-hidden" style={{
-          backgroundColor: 'var(--bg-secondary)',
-          border: '1px solid var(--border-primary)',
-        }}>
-          <div className="px-6 py-4 border-b" style={{ borderColor: 'var(--border-primary)' }}>
-            <h3 className="text-sm font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>TOP PRODUCTS</h3>
-          </div>
-          <div className="p-4">
-            {data.topProducts?.length > 0 ? (
-              <div className="space-y-1">
-                {data.topProducts.map((p, i) => (
-                  <div key={p._id}
-                    className="flex items-center justify-between p-3 rounded-xl transition-colors"
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shrink-0"
-                        style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-                        {i + 1}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{p.name || 'Unknown Product'}</p>
-                        <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{p.sku || ''} · Qty: {p.totalQty || 0} {p.unit || 'pcs'}</p>
-                      </div>
-                    </div>
-                    <p className="text-sm font-black shrink-0 ml-3" style={{ color: 'var(--text-primary)' }}>
-                      ₦{(p.totalAmount || 0).toLocaleString()}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-center py-10 text-sm font-medium" style={{ color: 'var(--text-muted)' }}>No product sales data yet</p>
             )}
           </div>
         </div>

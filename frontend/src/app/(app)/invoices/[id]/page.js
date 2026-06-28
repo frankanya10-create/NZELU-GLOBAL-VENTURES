@@ -12,7 +12,7 @@ import ProformaInvoicePrint from '@/components/invoice/ProformaInvoicePrint';
 import {
   HiOutlineArrowLeft, HiOutlinePrinter, HiOutlineTrash,
   HiOutlineCheckCircle, HiOutlineDocumentText, HiOutlineCurrencyDollar,
-  HiOutlineCheck,
+  HiOutlineCheck, HiOutlinePencilSquare,
 } from 'react-icons/hi2';
 
 const statusBadge = {
@@ -165,36 +165,45 @@ export default function InvoiceDetailPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={handlePrint}
-              className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold transition-all duration-200"
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <button onClick={() => router.push(`/invoices/new?edit=${invoice._id}`)}
+              className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-sm font-bold transition-all duration-200 flex-1 sm:flex-none"
               style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
               onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--ngv-active-bg)'; e.currentTarget.style.color = 'var(--ngv-active-text)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-              <HiOutlinePrinter className="w-4 h-4" />
+              <HiOutlinePencilSquare className="w-4 h-4 shrink-0" />
+              Edit
+            </button>
+            <button onClick={handlePrint}
+              className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-sm font-bold transition-all duration-200 flex-1 sm:flex-none"
+              style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--ngv-active-bg)'; e.currentTarget.style.color = 'var(--ngv-active-text)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+              <HiOutlinePrinter className="w-4 h-4 shrink-0" />
               Print
             </button>
             {invoice.type === 'cash_sales' && invoice.status !== 'paid' && invoice.status !== 'cancelled' && (
               <button onClick={() => setShowCommitModal(true)}
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold text-white transition-all duration-200"
+                className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-sm font-bold text-white transition-all duration-200 flex-1 sm:flex-none"
                 style={{ backgroundColor: 'var(--ngv-active-bg)' }}>
-                <HiOutlineCheckCircle className="w-4 h-4" />
+                <HiOutlineCheckCircle className="w-4 h-4 shrink-0" />
                 Commit
               </button>
             )}
             {invoice.type === 'proforma' && invoice.status !== 'converted' && invoice.status !== 'cancelled' && (
               <button onClick={() => setShowConvertModal(true)}
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold text-white transition-all duration-200"
+                className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-sm font-bold text-white transition-all duration-200 flex-1 sm:flex-none"
                 style={{ backgroundColor: '#166534' }}>
-                <HiOutlineCurrencyDollar className="w-4 h-4" />
-                Convert to Sales Invoice
+                <HiOutlineCurrencyDollar className="w-4 h-4 shrink-0" />
+                <span className="sm:hidden">Convert</span>
+                <span className="hidden sm:inline">Convert to Sales Invoice</span>
               </button>
             )}
             {isAdmin && (
               <button onClick={() => setShowDeleteModal(true)}
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold transition-all duration-200"
+                className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-sm font-bold transition-all duration-200 flex-1 sm:flex-none"
                 style={{ color: '#ef4444', backgroundColor: '#fef2f2' }}>
-                <HiOutlineTrash className="w-4 h-4" />
+                <HiOutlineTrash className="w-4 h-4 shrink-0" />
                 Delete
               </button>
             )}

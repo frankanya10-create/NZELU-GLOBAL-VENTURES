@@ -37,7 +37,7 @@ router.get('/summary', async (req, res) => {
       lowStockProducts,
       totalExpenses,
       recentInvoices,
-      topCustomers,
+      topProducts,
     ] = await Promise.all([
       Invoice.aggregate([
         { $match: { ...filter, date: { $gte: todayStart }, type: 'cash_sales', status: 'paid' } },
@@ -71,17 +71,30 @@ router.get('/summary', async (req, res) => {
         .limit(5)
         .populate('customer', 'name telephone')
         .populate('createdBy', 'name'),
-      Invoice.aggregate([
-        { $match: { ...filter, 'items.product': { $ne: null } } },
-        { $unwind: '$items' },
-        { $match: { 'items.product': { $ne: null } } },
-        { $group: { _id: '$items.product', totalQty: { $sum: '$items.quantity' }, totalAmount: { $sum: '$items.total' }, count: { $sum: 1 } } },
-        { $sort: { totalAmount: -1 } },
-        { $limit: 5 },
-        { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'product' } },
-        { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
-        { $project: { name: '$product.name', sku: '$product.sku', unit: '$product.unit', totalQty: 1, totalAmount: 1, count: 1 } },
-      ]),
+      (async () => {
+        try {
+          const agg = await Invoice.aggregate([
+            { $match: { isDeleted: { $ne: true }, status: { $ne: 'draft' }, 'items.product': { $ne: null } } },
+            { $unwind: '$items' },
+            { $match: { 'items.product': { $ne: null } } },
+            { $group: { _id: '$items.product', totalQty: { $sum: '$items.quantity' }, totalAmount: { $sum: '$items.total' } } },
+            { $sort: { totalAmount: -1 } },
+            { $limit: 5 },
+          ]);
+          const ids = agg.map(a => a._id);
+          const products = ids.length ? await Product.find({ _id: { $in: ids } }).select('name sku unit') : [];
+          const map = {};
+          products.forEach(p => { map[p._id.toString()] = p; });
+          return agg.map(a => ({
+            _id: a._id,
+            name: map[a._id.toString()]?.name || 'Deleted Product',
+            sku: map[a._id.toString()]?.sku || '',
+            unit: map[a._id.toString()]?.unit || 'pcs',
+            totalQty: a.totalQty,
+            totalAmount: a.totalAmount,
+          }));
+        } catch { return []; }
+      })(),
     ]);
 
     const data = {

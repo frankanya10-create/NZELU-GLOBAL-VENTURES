@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { gsap } from 'gsap';
 import toast from 'react-hot-toast';
 import { invoicesAPI, customersAPI, productsAPI, rollsAPI } from '@/lib/api';
@@ -21,6 +21,7 @@ const roleLabels = {
 
 export default function NewInvoicePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const user = useAuthStore((s) => s.user);
 
   const [type, setType] = useState('proforma');
@@ -38,7 +39,7 @@ export default function NewInvoicePage() {
   const [items, setItems] = useState([{ description: '', quantity: '', unit: 'pcs', unitPrice: '', product: null, roll: null, rollId: '' }]);
   const [subtotal, setSubtotal] = useState(0);
   
-  const [amountPaid, setAmountPaid] = useState(0);
+  const [amountPaid, setAmountPaid] = useState('');
   const [grandTotal, setGrandTotal] = useState(0);
   const [balanceDue, setBalanceDue] = useState(0);
   const [paymentStatus, setPaymentStatus] = useState('unpaid');
@@ -138,6 +139,16 @@ export default function NewInvoicePage() {
     return () => ctx.revert();
   }, []);
 
+  useEffect(() => {
+    const editId = searchParams.get('edit');
+    if (editId) {
+      invoicesAPI.get(editId).then(res => {
+        const inv = res.data.data;
+        selectInvoice(inv);
+      }).catch(() => toast.error('Failed to load invoice for editing.'));
+    }
+  }, []);
+
   const loadNextCode = async (invoiceType) => {
     try {
       const res = await invoicesAPI.nextCode(invoiceType || type);
@@ -172,7 +183,8 @@ export default function NewInvoicePage() {
       setIsSupplied(data.isSupplied || false);
       setPaymentStatus(data.paymentStatus || 'unpaid');
       setNotes(data.notes || '');
-      setAmountPaid(data.amountPaid || 0);
+      setAmountPaid(data.amountPaid || '');
+      setInvoiceCode(data.invoiceCode);
       setLoadedFrom({ code: data.invoiceCode, id: data._id });
       setInvoiceSearch('');
       setShowInvoiceDropdown(false);
@@ -188,10 +200,11 @@ export default function NewInvoicePage() {
     const s = items.reduce((sum, item) => sum + ((parseInt(item.quantity) || 0) * parseFloat(item.unitPrice || 0)), 0);
     setSubtotal(s);
     setGrandTotal(s);
-    const bd = Math.max(0, s - amountPaid);
+    const ap = parseFloat(amountPaid) || 0;
+    const bd = Math.max(0, s - ap);
     setBalanceDue(bd);
-    if (amountPaid >= s) setPaymentStatus('paid');
-    else if (amountPaid > 0) setPaymentStatus('part_payment');
+    if (ap >= s) setPaymentStatus('paid');
+    else if (ap > 0) setPaymentStatus('part_payment');
     else setPaymentStatus('unpaid');
   };
 
@@ -282,16 +295,23 @@ export default function NewInvoicePage() {
         subtotal,
         depositPercent: type === 'proforma' ? depositPercent : undefined,
         isSupplied,
-        amountPaid: type === 'cash_sales' ? amountPaid : 0,
+        amountPaid: type === 'cash_sales' ? parseFloat(amountPaid || 0) : 0,
         grandTotal, balanceDue, paymentStatus, notes,
       };
-      const res = await invoicesAPI.create(payload);
-      const invoice = res.data.data;
-      if (type === 'cash_sales' && amountPaid > 0) {
-        await invoicesAPI.commit(invoice._id, { amountPaid });
+      let invoice;
+      if (loadedFrom?.id) {
+        const res = await invoicesAPI.update(loadedFrom.id, payload);
+        invoice = res.data.data;
+        toast.success('Invoice updated successfully!');
+      } else {
+        const res = await invoicesAPI.create(payload);
+        invoice = res.data.data;
+        if (type === 'cash_sales' && parseFloat(amountPaid || 0) > 0) {
+          await invoicesAPI.commit(invoice._id, { amountPaid });
+        }
+        toast.success((type === 'cash_sales' ? 'Cash Sales' : 'Proforma') + ' Invoice created successfully!');
       }
-      toast.success(`${type === 'cash_sales' ? 'Cash Sales' : 'Proforma'} Invoice created successfully!`);
-      router.push(`/invoices/${invoice._id}`);
+      router.push('/invoices/' + invoice._id);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to create invoice.');
     } finally {
@@ -713,12 +733,12 @@ export default function NewInvoicePage() {
                 <div className="pt-3 space-y-3 border-t" style={{ borderColor: 'var(--border-primary)' }}>
                   <p className="text-[10px] font-bold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>Payment</p>
                   <div className="field-group relative">
-                    <input type="number" id="amt-paid" value={amountPaid}
-                      onChange={(e) => setAmountPaid(Math.max(0, parseFloat(e.target.value) || 0))}
-                      className="peer ngv-input h-12 pt-4 text-lg font-black" placeholder=" " min="0" />
+                    <input type="text" inputMode="numeric" id="amt-paid" value={amountPaid}
+                      onChange={(e) => setAmountPaid(e.target.value.replace(/[^0-9]/g, ''))}
+                      className="peer ngv-input h-12 pt-4 text-lg font-black" placeholder=" " />
                     <label htmlFor="amt-paid"
                       className={`absolute left-4 transition-all duration-200 pointer-events-none ${
-                        amountPaid > 0 ? 'top-0.5 text-[9px] font-bold' : 'top-3.5 text-sm'
+                        amountPaid !== '' ? 'top-0.5 text-[9px] font-bold' : 'top-3.5 text-sm'
                       } peer-focus:top-0.5 peer-focus:text-[9px] peer-focus:font-bold`}
                       style={{ color: 'var(--text-muted)' }}>
                       Amount Paid (₦)
