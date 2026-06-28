@@ -1,14 +1,6 @@
 'use client';
 import PrintStyles from './PrintStyles';
 
-const Checked = () => (
-  <span className="print-checkbox checked" />
-);
-
-const Unchecked = () => (
-  <span className="print-checkbox" />
-);
-
 export default function ProformaInvoicePrint({ invoice }) {
   if (!invoice) return null;
 
@@ -64,18 +56,13 @@ export default function ProformaInvoicePrint({ invoice }) {
                 </div>
               </div>
               <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 6 }}>
-                <span style={{ fontSize: 9, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>Payment Status</span>
-                <div style={{ display: 'flex', gap: 12, marginTop: 3 }}>
-                  <div className="print-checkbox-row">{invoice.paymentStatus === 'paid' ? <Checked /> : <Unchecked />} Paid</div>
-                  <div className="print-checkbox-row">{invoice.paymentStatus === 'part_payment' ? <Checked /> : <Unchecked />} Part Payment</div>
-                  <div className="print-checkbox-row">{invoice.paymentStatus === 'unpaid' ? <Checked /> : <Unchecked />} Unpaid</div>
-                </div>
-              </div>
-              <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 6 }}>
-                <span style={{ fontSize: 9, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>Supply Status</span>
-                <div style={{ display: 'flex', gap: 12, marginTop: 3 }}>
-                  <div className="print-checkbox-row">{invoice.isSupplied ? <Checked /> : <Unchecked />} Supplied</div>
-                  <div className="print-checkbox-row">{!invoice.isSupplied ? <Checked /> : <Unchecked />} Not Supplied</div>
+                <span style={{ fontSize: 9, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>Bank Details</span>
+                <div style={{ fontSize: 10, marginTop: 3, lineHeight: 1.6 }}>
+                  <div><span style={{ fontWeight: 600, color: '#6b7280', fontSize: 9 }}>Account Number:</span></div>
+                  <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: 0.5, marginBottom: 4 }}>2284429344</div>
+                  <div><span style={{ fontWeight: 600, color: '#6b7280', fontSize: 9 }}>Account Name:</span></div>
+                  <div style={{ fontWeight: 600 }}>Nzelu Akachukwu</div>
+                  <div style={{ marginTop: 2 }}><span style={{ fontWeight: 600, color: '#6b7280', fontSize: 9 }}>Bank:</span> <span style={{ fontWeight: 600 }}>Zenith Bank</span></div>
                 </div>
               </div>
             </div>
@@ -136,14 +123,8 @@ export default function ProformaInvoicePrint({ invoice }) {
           </div>
         )}
 
-        {/* ── FOOTER: BANK DETAILS + SIGNATURE ── */}
+        {/* ── FOOTER: SIGNATURE ── */}
         <div style={{ padding: '16px 24px 20px', display: 'flex', gap: 16, borderTop: '1px solid #e5e7eb' }}>
-          <div className="print-footer-box" style={{ flex: 1 }}>
-            <div className="title">Bank Details</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <div><span style={{ fontWeight: 600, color: '#6b7280', fontSize: 9 }}>Account: </span><span style={{ fontWeight: 700 }}>2284429344 - Nzelu Akachukwu (Zenith Bank)</span></div>
-            </div>
-          </div>
           <div className="print-footer-box" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', width: 280 }}>
             <div className="title">Authorized Signature</div>
             <img src="/signature.png" alt="Signature" style={{ width: 140, height: 'auto', marginTop: 2 }} />

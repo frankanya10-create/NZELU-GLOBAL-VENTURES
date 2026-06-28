@@ -45,7 +45,11 @@ export default function InvoiceDetailPage() {
   const [showCommitModal, setShowCommitModal] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [converting, setConverting] = useState(false);
-  const [commitAmount, setCommitAmount] = useState(0);
+  const [commitAmount, setCommitAmount] = useState('');
+  const [commitIsSupplied, setCommitIsSupplied] = useState(true);
+  const [convertPaymentStatus, setConvertPaymentStatus] = useState('paid');
+  const [convertIsSupplied, setConvertIsSupplied] = useState(true);
+  const [convertAmountPaid, setConvertAmountPaid] = useState('');
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -86,7 +90,9 @@ export default function InvoiceDetailPage() {
 
   const handleCommit = async () => {
     try {
-      await invoicesAPI.commit(params.id, { amountPaid: commitAmount });
+      const payload = { amountPaid: parseFloat(commitAmount) || 0 };
+      if (!invoice.isSupplied) payload.isSupplied = commitIsSupplied;
+      await invoicesAPI.commit(params.id, payload);
       toast.success('Invoice committed successfully!');
       loadInvoice();
     } catch (err) {
@@ -98,10 +104,14 @@ export default function InvoiceDetailPage() {
   const handleConvert = async () => {
     setConverting(true);
     try {
-      const res = await invoicesAPI.convert(params.id);
+      const payload = { paymentStatus: convertPaymentStatus, isSupplied: convertIsSupplied };
+      if (convertPaymentStatus === 'part_payment') {
+        payload.amountPaid = parseFloat(convertAmountPaid) || 0;
+      }
+      const res = await invoicesAPI.convert(params.id, payload);
       toast.success('Proforma converted to Sales Invoice!');
       setShowConvertModal(false);
-      router.push(`/invoices/${res.data.data.salesInvoice._id}`);
+      router.push('/invoices/' + res.data.data.salesInvoice._id);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to convert invoice.');
       setConverting(false);
@@ -183,7 +193,7 @@ export default function InvoiceDetailPage() {
               Print
             </button>
             {invoice.type === 'cash_sales' && invoice.status !== 'paid' && invoice.status !== 'cancelled' && (
-              <button onClick={() => setShowCommitModal(true)}
+              <button onClick={() => { setShowCommitModal(true); setCommitAmount(''); setCommitIsSupplied(true); }}
                 className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-sm font-bold text-white transition-all duration-200 flex-1 sm:flex-none"
                 style={{ backgroundColor: 'var(--ngv-active-bg)' }}>
                 <HiOutlineCheckCircle className="w-4 h-4 shrink-0" />
@@ -191,7 +201,7 @@ export default function InvoiceDetailPage() {
               </button>
             )}
             {invoice.type === 'proforma' && invoice.status !== 'converted' && invoice.status !== 'cancelled' && (
-              <button onClick={() => setShowConvertModal(true)}
+              <button onClick={() => { setShowConvertModal(true); setConvertPaymentStatus('paid'); setConvertIsSupplied(true); setConvertAmountPaid(''); }}
                 className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-sm font-bold text-white transition-all duration-200 flex-1 sm:flex-none"
                 style={{ backgroundColor: '#166534' }}>
                 <HiOutlineCurrencyDollar className="w-4 h-4 shrink-0" />
@@ -400,12 +410,44 @@ export default function InvoiceDetailPage() {
 
       <Modal isOpen={showCommitModal} onClose={() => setShowCommitModal(false)} title="Commit Payment" size="sm">
         <p className="text-sm font-medium mb-4" style={{ color: 'var(--text-muted)' }}>
-          Enter the amount paid to commit this Cash Sales invoice. Stock will be deducted.
+          Record payment for <strong style={{ color: 'var(--text-primary)' }}>{invoice.invoiceCode}</strong>. Stock will be deducted.
         </p>
-        <div className="mb-4">
-          <label className="text-xs font-bold tracking-wide uppercase mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Amount Paid (₦)</label>
-          <input type="number" value={commitAmount} onChange={(e) => setCommitAmount(parseFloat(e.target.value) || 0)}
-            className="ngv-input text-lg font-bold" />
+        <div className="space-y-3 mb-4">
+          <div className="flex justify-between items-center py-2 px-4 rounded-xl" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+            <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Grand Total</span>
+            <span className="text-sm font-black">₦{invoice.grandTotal?.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between items-center py-2 px-4 rounded-xl" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+            <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Already Paid</span>
+            <span className="text-sm font-black" style={{ color: '#166534' }}>₦{(invoice.amountPaid || 0).toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between items-center py-2 px-4 rounded-xl" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+            <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Remaining</span>
+            <span className="text-sm font-black text-red-600">₦{Math.max(0, invoice.grandTotal - (invoice.amountPaid || 0)).toLocaleString()}</span>
+          </div>
+          <div>
+            <label className="text-xs font-bold tracking-wide uppercase mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Amount Paying Now (₦)</label>
+            <input type="text" inputMode="numeric" value={commitAmount} onChange={(e) => setCommitAmount(e.target.value.replace(/[^0-9]/g, ''))}
+              className="ngv-input text-lg font-bold" />
+          </div>
+          {commitAmount && parseFloat(commitAmount) > 0 && (
+            <div className="flex justify-between items-center py-2 px-4 rounded-xl" style={{ backgroundColor: '#fef2f2' }}>
+              <span className="text-xs font-semibold text-red-700">New Balance Due</span>
+              <span className="text-sm font-black" style={{ color: Math.max(0, invoice.grandTotal - (invoice.amountPaid || 0) - parseFloat(commitAmount)) === 0 ? '#166534' : '#dc2626' }}>
+                ₦{Math.max(0, invoice.grandTotal - (invoice.amountPaid || 0) - parseFloat(commitAmount)).toLocaleString()}
+              </span>
+            </div>
+          )}
+          {!invoice.isSupplied && (
+            <div>
+              <label className="text-xs font-bold tracking-wide uppercase mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Supply Status</label>
+              <select value={commitIsSupplied ? 'supplied' : 'not_supplied'} onChange={(e) => setCommitIsSupplied(e.target.value === 'supplied')}
+                className="ngv-select h-10 text-sm w-full">
+                <option value="not_supplied">Not Supplied</option>
+                <option value="supplied">Supplied</option>
+              </select>
+            </div>
+          )}
         </div>
         <div className="flex gap-3">
           <button onClick={() => setShowCommitModal(false)}
@@ -413,7 +455,7 @@ export default function InvoiceDetailPage() {
             style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border-primary)' }}>
             Cancel
           </button>
-          <button onClick={handleCommit} disabled={commitAmount <= 0}
+          <button onClick={handleCommit} disabled={!commitAmount || parseFloat(commitAmount) <= 0}
             className="flex-1 h-11 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50"
             style={{ backgroundColor: 'var(--ngv-active-bg)' }}>
             Commit Payment
@@ -424,9 +466,36 @@ export default function InvoiceDetailPage() {
       <Modal isOpen={showConvertModal} onClose={() => { if (!converting) setShowConvertModal(false); }} title="Convert to Sales Invoice" size="sm">
         <p className="text-sm font-medium mb-4" style={{ color: 'var(--text-muted)' }}>
           This will convert the proforma <strong style={{ color: 'var(--text-primary)' }}>{invoice.invoiceCode}</strong> into a
-          paid Sales Invoice for <strong style={{ color: 'var(--text-primary)' }}>₦{invoice.grandTotal?.toLocaleString()}</strong>.
+          Sales Invoice for <strong style={{ color: 'var(--text-primary)' }}>₦{invoice.grandTotal?.toLocaleString()}</strong>.
           Stock will be deducted and the proforma will be marked as converted.
         </p>
+        <div className="space-y-4 mb-4">
+          <div>
+            <label className="text-[10px] font-bold tracking-wider uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Payment Status</label>
+            <select value={convertPaymentStatus} onChange={(e) => { setConvertPaymentStatus(e.target.value); if (e.target.value !== 'part_payment') setConvertAmountPaid(''); }}
+              className="ngv-select h-10 text-sm w-full">
+              <option value="paid">Paid</option>
+              <option value="part_payment">Part Payment</option>
+              <option value="unpaid">Unpaid</option>
+            </select>
+          </div>
+          {convertPaymentStatus === 'part_payment' && (
+            <div>
+              <label className="text-[10px] font-bold tracking-wider uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Amount Paid (₦)</label>
+              <input type="text" inputMode="numeric" value={convertAmountPaid}
+                onChange={(e) => setConvertAmountPaid(e.target.value.replace(/[^0-9]/g, ''))}
+                className="ngv-input h-10 text-sm w-full" placeholder="Enter amount paid" />
+            </div>
+          )}
+          <div>
+            <label className="text-[10px] font-bold tracking-wider uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Supply Status</label>
+            <select value={convertIsSupplied ? 'supplied' : 'not_supplied'} onChange={(e) => setConvertIsSupplied(e.target.value === 'supplied')}
+              className="ngv-select h-10 text-sm w-full">
+              <option value="not_supplied">Not Supplied</option>
+              <option value="supplied">Supplied</option>
+            </select>
+          </div>
+        </div>
         <p className="text-xs font-medium mb-4 p-3 rounded-xl" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
           This action cannot be undone. A new Sales Invoice will be created and you will be redirected.
         </p>

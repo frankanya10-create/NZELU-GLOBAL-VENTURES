@@ -161,8 +161,8 @@ router.put('/:id', auditLogger('invoice_updated'), async (req, res) => {
     const invoice = await Invoice.findById(req.params.id);
     if (!invoice) return res.status(404).json({ message: 'Invoice not found.' });
 
-    if (invoice.status === 'paid' || invoice.status === 'cancelled') {
-      return res.status(400).json({ message: `Cannot update a ${invoice.status} invoice.` });
+    if (invoice.status === 'cancelled') {
+      return res.status(400).json({ message: 'Cannot update a cancelled invoice.' });
     }
 
     const updates = req.body;
@@ -203,9 +203,13 @@ router.post('/:id/commit', auditLogger('invoice_paid'), async (req, res) => {
       return res.status(400).json({ message: 'Only Cash Sales invoices can be committed.' });
     }
 
-    invoice.status = 'paid';
-    invoice.amountPaid = req.body.amountPaid || invoice.grandTotal;
+    if (req.body.isSupplied !== undefined) invoice.isSupplied = req.body.isSupplied;
+    invoice.amountPaid = (invoice.amountPaid || 0) + (req.body.amountPaid || 0);
     await invoice.save();
+
+    if (invoice.convertedFrom && invoice.paymentStatus === 'paid') {
+      await Invoice.findByIdAndUpdate(invoice.convertedFrom, { paymentStatus: 'paid', status: 'paid' });
+    }
 
     if (invoice.customer) {
       const customer = await Customer.findById(invoice.customer);
@@ -295,10 +299,27 @@ router.post('/:id/convert', auditLogger('invoice_converted'), async (req, res) =
       return res.status(400).json({ message: 'Cannot convert a cancelled proforma.' });
     }
 
+    const { paymentStatus = 'paid', isSupplied = true, amountPaid: userAmountPaid } = req.body;
+
+    let amountPaid, balanceDue;
+    if (paymentStatus === 'paid') {
+      amountPaid = proforma.grandTotal;
+      balanceDue = 0;
+    } else if (paymentStatus === 'part_payment') {
+      amountPaid = userAmountPaid || 0;
+      balanceDue = Math.max(0, proforma.grandTotal - amountPaid);
+    } else {
+      amountPaid = 0;
+      balanceDue = proforma.grandTotal;
+    }
+
     const salesInvoiceData = {
       type: 'cash_sales',
-      status: 'paid',
-      paymentStatus: 'paid',
+      status: paymentStatus === 'paid' ? 'paid' : 'pending',
+      paymentStatus,
+      isSupplied,
+      amountPaid,
+      balanceDue,
       invoiceCode: await generateInvoiceCode(Invoice, 'cash_sales'),
       date: new Date(),
       customer: proforma.customer,
@@ -316,8 +337,6 @@ router.post('/:id/convert', auditLogger('invoice_converted'), async (req, res) =
       })),
       subtotal: proforma.subtotal,
       grandTotal: proforma.grandTotal,
-      amountPaid: proforma.grandTotal,
-      balanceDue: 0,
       createdBy: req.user._id,
       branch: proforma.branch || req.user.branch,
       notes: proforma.notes,
@@ -327,7 +346,8 @@ router.post('/:id/convert', auditLogger('invoice_converted'), async (req, res) =
     const salesInvoice = await Invoice.create(salesInvoiceData);
 
     proforma.status = 'converted';
-    proforma.paymentStatus = 'paid';
+    proforma.paymentStatus = paymentStatus;
+    proforma.isSupplied = isSupplied;
     proforma.convertedTo = salesInvoice._id;
     await proforma.save();
 

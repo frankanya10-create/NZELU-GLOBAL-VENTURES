@@ -43,7 +43,7 @@ export default function NewInvoicePage() {
   const [grandTotal, setGrandTotal] = useState(0);
   const [balanceDue, setBalanceDue] = useState(0);
   const [paymentStatus, setPaymentStatus] = useState('unpaid');
-  const [depositPercent, setDepositPercent] = useState(70);
+  const [depositPercent, setDepositPercent] = useState('70');
   const [isSupplied, setIsSupplied] = useState(false);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
@@ -179,7 +179,7 @@ export default function NewInvoicePage() {
         roll: item.roll?._id || item.roll || null,
         rollId: item.rollId || '',
       })));
-      setDepositPercent(data.depositPercent || 70);
+      setDepositPercent(data.depositPercent?.toString() || '70');
       setIsSupplied(data.isSupplied || false);
       setPaymentStatus(data.paymentStatus || 'unpaid');
       setNotes(data.notes || '');
@@ -203,9 +203,6 @@ export default function NewInvoicePage() {
     const ap = parseFloat(amountPaid) || 0;
     const bd = Math.max(0, s - ap);
     setBalanceDue(bd);
-    if (ap >= s) setPaymentStatus('paid');
-    else if (ap > 0) setPaymentStatus('part_payment');
-    else setPaymentStatus('unpaid');
   };
 
   const addItem = () => setItems([...items, { description: '', quantity: '', unit: 'pcs', unitPrice: '', product: null, roll: null, rollId: '' }]);
@@ -293,7 +290,7 @@ export default function NewInvoicePage() {
           product: item.product, roll: item.roll, rollId: item.rollId,
         })),
         subtotal,
-        depositPercent: type === 'proforma' ? depositPercent : undefined,
+        depositPercent: type === 'proforma' ? parseInt(depositPercent) || 70 : undefined,
         isSupplied,
         amountPaid: type === 'cash_sales' ? parseFloat(amountPaid || 0) : 0,
         grandTotal, balanceDue, paymentStatus, notes,
@@ -302,14 +299,12 @@ export default function NewInvoicePage() {
       if (loadedFrom?.id) {
         const res = await invoicesAPI.update(loadedFrom.id, payload);
         invoice = res.data.data;
-        toast.success('Invoice updated successfully!');
       } else {
         const res = await invoicesAPI.create(payload);
         invoice = res.data.data;
         if (type === 'cash_sales' && parseFloat(amountPaid || 0) > 0) {
           await invoicesAPI.commit(invoice._id, { amountPaid });
         }
-        toast.success((type === 'cash_sales' ? 'Cash Sales' : 'Proforma') + ' Invoice created successfully!');
       }
       router.push('/invoices/' + invoice._id);
     } catch (err) {
@@ -359,7 +354,7 @@ export default function NewInvoicePage() {
           </p>
         </div>
         <div className="flex items-center gap-2 p-1 rounded-2xl" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
-            <button onClick={() => { setType('proforma'); setAmountPaid(0); setLoadedFrom(null); setDepositPercent(70); setIsSupplied(false); setPaymentStatus('unpaid'); }}
+            <button onClick={() => { setType('proforma'); setAmountPaid(''); setLoadedFrom(null); setDepositPercent('70'); }}
               className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200"
               style={{
                 backgroundColor: type === 'proforma' ? 'var(--bg-secondary)' : 'transparent',
@@ -698,32 +693,15 @@ export default function NewInvoicePage() {
               {/* Proforma status section */}
               {type === 'proforma' && (
                 <div className="pt-3 space-y-3 border-t" style={{ borderColor: 'var(--border-primary)' }}>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] font-bold tracking-wider uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Deposit %</label>
-                      <select value={depositPercent} onChange={(e) => setDepositPercent(parseInt(e.target.value))}
-                        className="ngv-select h-10 text-sm">
-                        <option value={50}>50%</option>
-                        <option value={70}>70%</option>
-                        <option value={100}>100%</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold tracking-wider uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Payment</label>
-                      <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)}
-                        className="ngv-select h-10 text-sm">
-                        <option value="unpaid">Unpaid</option>
-                        <option value="part_payment">Part Payment</option>
-                        <option value="paid">Paid</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between py-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Supplied</span>
-                    <button onClick={() => setIsSupplied(!isSupplied)}
-                      className={`relative w-11 h-6 rounded-full transition-colors ${isSupplied ? 'bg-ngv-700' : 'bg-gray-300'}`}>
-                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isSupplied ? 'translate-x-5' : ''}`} />
-                    </button>
+                  <div className="field-group relative">
+                    <input type="text" inputMode="numeric" id="deposit-pct" value={depositPercent}
+                      onChange={(e) => setDepositPercent(e.target.value.replace(/[^0-9]/g, ''))}
+                      className="peer ngv-input h-12 pt-4 text-lg font-black" placeholder=" " />
+                    <label htmlFor="deposit-pct"
+                      className={'absolute left-4 transition-all duration-200 pointer-events-none ' + (depositPercent !== '' ? 'top-0.5 text-[9px] font-bold' : 'top-3.5 text-sm')}
+                      style={{ color: 'var(--text-muted)' }}>
+                      Deposit %
+                    </label>
                   </div>
                 </div>
               )}
@@ -751,15 +729,24 @@ export default function NewInvoicePage() {
                       ₦{balanceDue.toLocaleString()}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Status:</span>
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg ${
-                      paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-800' :
-                      paymentStatus === 'part_payment' ? 'bg-amber-100 text-amber-800' :
-                      'bg-gray-100 text-gray-600'
-                    }`}>
-                      {paymentStatus.replace('_', ' ')}
-                    </span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold tracking-wider uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Payment Status</label>
+                      <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)}
+                        className="ngv-select h-10 text-sm">
+                        <option value="unpaid">Unpaid</option>
+                        <option value="part_payment">Part Payment</option>
+                        <option value="paid">Paid</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold tracking-wider uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Supply Status</label>
+                      <select value={isSupplied ? 'supplied' : 'not_supplied'} onChange={(e) => setIsSupplied(e.target.value === 'supplied')}
+                        className="ngv-select h-10 text-sm">
+                        <option value="not_supplied">Not Supplied</option>
+                        <option value="supplied">Supplied</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
               )}
