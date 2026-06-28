@@ -5,10 +5,9 @@ import { gsap } from 'gsap';
 import toast from 'react-hot-toast';
 import { invoicesAPI, customersAPI, productsAPI, rollsAPI } from '@/lib/api';
 import useAuthStore from '@/store/authStore';
-import Modal from '@/components/ui/Modal';
 import {
-  HiOutlinePlus, HiOutlineTrash, HiOutlineCalculator,
-  HiOutlineMagnifyingGlass, HiOutlineXMark, HiOutlineArrowLeft,
+  HiOutlinePlus, HiOutlineTrash,
+  HiOutlineMagnifyingGlass, HiOutlineArrowLeft,
   HiOutlineBanknotes, HiOutlineDocumentText, HiOutlineCurrencyDollar,
   HiOutlineCheck,
 } from 'react-icons/hi2';
@@ -37,7 +36,7 @@ export default function NewInvoicePage() {
   const [customerTelephone, setCustomerTelephone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
-  const [items, setItems] = useState([{ description: '', quantity: 1, unit: 'pcs', unitPrice: 0, product: null, roll: null, rollId: '' }]);
+  const [items, setItems] = useState([{ description: '', quantity: '', unit: 'pcs', unitPrice: '', product: null, roll: null, rollId: '' }]);
   const [subtotal, setSubtotal] = useState(0);
   
   const [amountPaid, setAmountPaid] = useState(0);
@@ -46,12 +45,6 @@ export default function NewInvoicePage() {
   const [paymentStatus, setPaymentStatus] = useState('unpaid');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
-
-  const [showCalcPopover, setShowCalcPopover] = useState(false);
-  const [calcItemIndex, setCalcItemIndex] = useState(null);
-  const [calcYards, setCalcYards] = useState('');
-  const [calcLength, setCalcLength] = useState('');
-  const [calcWidth, setCalcWidth] = useState('');
 
   // Invoice search + auto-fill
   const [invoiceSearch, setInvoiceSearch] = useState('');
@@ -79,7 +72,7 @@ export default function NewInvoicePage() {
   const animRan = useRef(false);
 
   useEffect(() => {
-    loadNextCode();
+    loadNextCode(type);
     if (type === 'proforma') {
       const d = new Date();
       d.setDate(d.getDate() + 14);
@@ -144,9 +137,9 @@ export default function NewInvoicePage() {
     return () => ctx.revert();
   }, []);
 
-  const loadNextCode = async () => {
+  const loadNextCode = async (invoiceType) => {
     try {
-      const res = await invoicesAPI.nextCode(type);
+      const res = await invoicesAPI.nextCode(invoiceType || type);
       setInvoiceCode(res.data.code);
     } catch { setInvoiceCode('NGV-2026-000001'); }
   };
@@ -170,7 +163,7 @@ export default function NewInvoicePage() {
         description: item.description,
         quantity: item.quantity,
         unit: item.unit || 'pcs',
-        unitPrice: item.unitPrice,
+        unitPrice: item.unitPrice?.toString() || '',
         product: item.product?._id || item.product || null,
         roll: item.roll?._id || item.roll || null,
         rollId: item.rollId || '',
@@ -189,7 +182,7 @@ export default function NewInvoicePage() {
   };
 
   const recalcTotals = () => {
-    const s = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    const s = items.reduce((sum, item) => sum + ((parseInt(item.quantity) || 0) * parseFloat(item.unitPrice || 0)), 0);
     setSubtotal(s);
     setGrandTotal(s);
     const bd = Math.max(0, s - amountPaid);
@@ -199,7 +192,7 @@ export default function NewInvoicePage() {
     else setPaymentStatus('unpaid');
   };
 
-  const addItem = () => setItems([...items, { description: '', quantity: 1, unit: 'pcs', unitPrice: 0, product: null, roll: null, rollId: '' }]);
+  const addItem = () => setItems([...items, { description: '', quantity: '', unit: 'pcs', unitPrice: '', product: null, roll: null, rollId: '' }]);
   const removeItem = (index) => { if (items.length > 1) setItems(items.filter((_, i) => i !== index)); };
   const updateItem = (index, field, value) => {
     const newItems = [...items];
@@ -240,7 +233,7 @@ export default function NewInvoicePage() {
     newItems[index] = {
       ...newItems[index],
       description: `${product.name}${product.sku ? ` (${product.sku})` : ''}`,
-      unitPrice: user?.role === 'cashier' ? (product.prices?.selling || 0) : (product.prices?.selling || 0),
+      unitPrice: ((user?.role === 'cashier' ? (product.prices?.selling) : (product.prices?.selling)) || 0).toString(),
       unit: product.unit || 'pcs',
       product: product._id,
       roll: null,
@@ -262,34 +255,8 @@ export default function NewInvoicePage() {
     setItems(newItems);
   };
 
-  const openCalculator = (index) => {
-    setCalcItemIndex(index);
-    setCalcYards('');
-    setCalcLength('');
-    setCalcWidth('');
-    setShowCalcPopover(true);
-  };
-
-  const applyCalculator = () => {
-    if (calcItemIndex === null) return;
-    const newItems = [...items];
-    const item = newItems[calcItemIndex];
-    if (calcYards) {
-      const meters = parseFloat(calcYards) * 0.9144;
-      item.quantity = Math.round(meters * 100) / 100;
-      item.unit = 'meters';
-    } else if (calcLength && calcWidth) {
-      const sqm = parseFloat(calcLength) * parseFloat(calcWidth);
-      item.quantity = Math.round(sqm * 100) / 100;
-      item.unit = 'sqm';
-    }
-    setItems(newItems);
-    setShowCalcPopover(false);
-    toast.success('Measurement applied to quantity.');
-  };
-
   const handleSubmit = async (action) => {
-    if (items.some(i => !i.description || i.quantity <= 0 || i.unitPrice <= 0)) {
+    if (items.some(i => !i.description || !i.quantity || parseInt(i.quantity) <= 0 || parseFloat(i.unitPrice || 0) <= 0)) {
       toast.error('Please fill in all line item fields with valid values.');
       return;
     }
@@ -308,7 +275,7 @@ export default function NewInvoicePage() {
         },
         items: items.map(item => ({
           description: item.description, quantity: item.quantity, unit: item.unit,
-          unitPrice: item.unitPrice, total: item.quantity * item.unitPrice,
+          unitPrice: parseFloat(item.unitPrice || 0), total: (parseInt(item.quantity) || 0) * parseFloat(item.unitPrice || 0),
           product: item.product, roll: item.roll, rollId: item.rollId,
         })),
         subtotal,
@@ -626,41 +593,29 @@ export default function NewInvoicePage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          <input type="number" value={item.quantity}
-                            onChange={(e) => updateItem(i, 'quantity', Math.max(0, parseFloat(e.target.value) || 0))}
-                            className="w-full bg-transparent text-sm font-bold text-center outline-none py-1.5" min="0" step="0.01"
-                            style={{ color: 'var(--text-primary)' }} />
-                          <button onClick={() => openCalculator(i)}
-                            className="p-1 rounded-md transition-colors shrink-0"
-                            style={{ color: 'var(--text-muted)' }}
-                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
-                            title="Measurement Calculator">
-                            <HiOutlineCalculator className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        <input type="number" value={item.quantity || ''}
+                          onChange={(e) => updateItem(i, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-full bg-transparent text-sm font-bold text-center outline-none py-1.5" min="0" step="0.01"
+                          style={{ color: 'var(--text-primary)' }} />
                       </td>
                       <td className="px-4 py-3">
                         <select value={item.unit} onChange={(e) => updateItem(i, 'unit', e.target.value)}
                           className="w-full bg-transparent text-xs font-bold text-center outline-none py-1.5"
                           style={{ color: 'var(--text-secondary)' }}>
                           <option value="pcs">pcs</option>
-                          <option value="meters">m</option>
                           <option value="yards">yds</option>
                           <option value="sqm">sqm</option>
                           <option value="rolls">rolls</option>
-                          <option value="sets">sets</option>
                         </select>
                       </td>
                       <td className="px-4 py-3">
                         <input type="number" value={item.unitPrice}
-                          onChange={(e) => updateItem(i, 'unitPrice', Math.max(0, parseFloat(e.target.value) || 0))}
-                          className="w-full bg-transparent text-sm font-bold text-right outline-none py-1.5" min="0" step="0.01"
+                          onChange={(e) => updateItem(i, 'unitPrice', e.target.value)}
+                          className="w-full bg-transparent text-sm font-bold text-right outline-none py-1.5" min="0" step="any"
                           style={{ color: 'var(--text-primary)' }} />
                       </td>
                       <td className="px-4 py-3 text-right text-sm font-black align-top pt-5" style={{ color: 'var(--text-primary)' }}>
-                        ₦{(item.quantity * item.unitPrice).toLocaleString()}
+                        ₦{((parseInt(item.quantity) || 0) * parseFloat(item.unitPrice || 0)).toLocaleString()}
                       </td>
                       <td className="px-4 py-3 align-top pt-4">
                         {item.product && activeRolls[i]?.length > 0 ? (
@@ -817,73 +772,6 @@ export default function NewInvoicePage() {
         </div>
       </div>
 
-      {/* Measurement Calculator Modal */}
-      {showCalcPopover && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-          onClick={() => setShowCalcPopover(false)}>
-          <div className="rounded-2xl p-6 w-full max-w-sm shadow-2xl"
-            style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-primary)' }}
-            onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-5">
-              <h4 className="text-sm font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                <HiOutlineCalculator className="w-4 h-4 inline mr-1.5 -mt-0.5" />
-                Measurement Calculator
-              </h4>
-              <button onClick={() => setShowCalcPopover(false)} className="p-1.5 rounded-xl transition-colors"
-                style={{ color: 'var(--text-muted)' }}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}>
-                <HiOutlineXMark className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-bold tracking-wider uppercase mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Yards → Meters</label>
-                <input type="number" value={calcYards}
-                  onChange={(e) => { setCalcYards(e.target.value); setCalcLength(''); setCalcWidth(''); }}
-                  placeholder="Enter yards" className="ngv-input h-11 text-sm" />
-                {calcYards && <p className="text-xs font-medium mt-1" style={{ color: 'var(--text-muted)' }}>= {(parseFloat(calcYards) * 0.9144).toFixed(3)} meters</p>}
-              </div>
-              <div className="h-px" style={{ backgroundColor: 'var(--border-primary)' }} />
-              <p className="text-[10px] font-bold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>Length × Width</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="field-group relative">
-                  <input type="number" id="calc-len" value={calcLength}
-                    onChange={(e) => { setCalcLength(e.target.value); setCalcYards(''); }}
-                    className="peer ngv-input h-11 pt-4 text-sm" placeholder=" " />
-                  <label htmlFor="calc-len"
-                    className={`absolute left-4 transition-all duration-200 pointer-events-none ${
-                      calcLength ? 'top-0.5 text-[9px] font-bold' : 'top-3 text-xs'
-                    } peer-focus:top-0.5 peer-focus:text-[9px] peer-focus:font-bold`}
-                    style={{ color: 'var(--text-muted)' }}>
-                    Length (m)
-                  </label>
-                </div>
-                <div className="field-group relative">
-                  <input type="number" id="calc-wid" value={calcWidth}
-                    onChange={(e) => { setCalcWidth(e.target.value); setCalcYards(''); }}
-                    className="peer ngv-input h-11 pt-4 text-sm" placeholder=" " />
-                  <label htmlFor="calc-wid"
-                    className={`absolute left-4 transition-all duration-200 pointer-events-none ${
-                      calcWidth ? 'top-0.5 text-[9px] font-bold' : 'top-3 text-xs'
-                    } peer-focus:top-0.5 peer-focus:text-[9px] peer-focus:font-bold`}
-                    style={{ color: 'var(--text-muted)' }}>
-                    Width (m)
-                  </label>
-                </div>
-              </div>
-              {calcLength && calcWidth && (
-                <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>= {(parseFloat(calcLength) * parseFloat(calcWidth)).toFixed(3)} sqm</p>
-              )}
-              <button onClick={applyCalculator} disabled={!calcYards && (!calcLength || !calcWidth)}
-                className="w-full h-11 rounded-xl text-sm font-bold text-white transition-all duration-200 disabled:opacity-40"
-                style={{ backgroundColor: 'var(--ngv-active-bg)' }}>
-                Apply to Quantity
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
