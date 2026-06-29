@@ -51,6 +51,12 @@ export default function StandardSalesInvoicePrint({ invoice }) {
                 <span className="label">Customer Tel</span>
                 <div className="value" style={{ fontWeight: 500 }}>{invoice.customerSnapshot?.telephone || '—'}</div>
               </div>
+              {(invoice.customerSnapshot?.address || invoice.billTo) && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <span className="label">Address</span>
+                  <div className="value" style={{ fontWeight: 500 }}>{invoice.customerSnapshot?.address || invoice.billTo}</div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -142,6 +148,15 @@ export default function StandardSalesInvoicePrint({ invoice }) {
             </div>
           </div>
         )}
+
+        {/* ── NON-REFUNDABLE NOTICE ── */}
+        <div style={{ padding: '0 24px 16px' }}>
+          <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 16px' }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', margin: 0, textAlign: 'center' }}>
+              Goods and services received in good condition is non refundable
+            </p>
+          </div>
+        </div>
 
         {/* ── FOOTER: TERMS + SIGNATURE ── */}
         <div style={{ padding: '16px 24px 20px', display: 'flex', gap: 16, borderTop: '1px solid #e5e7eb' }}>

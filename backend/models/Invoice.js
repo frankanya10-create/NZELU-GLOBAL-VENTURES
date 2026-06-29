@@ -63,6 +63,12 @@ const invoiceSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+  depositPercent: {
+    type: Number,
+    default: 70,
+    min: 0,
+    max: 100,
+  },
   date: {
     type: Date,
     default: Date.now,

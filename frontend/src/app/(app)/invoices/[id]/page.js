@@ -363,6 +363,10 @@ export default function InvoiceDetailPage() {
           {invoice.type === 'proforma' && (
             <div style={{ padding: '16px 28px', borderBottom: '1px solid var(--border-primary)' }}>
               <div style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: 12, padding: '12px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <p className="text-[10px] font-bold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>Deposit Required</p>
+                  <span style={{ fontSize: 14, fontWeight: 900, color: '#166534' }}>{invoice.depositPercent || 70}%</span>
+                </div>
                 <p className="text-[10px] font-bold tracking-wider uppercase mb-2" style={{ color: 'var(--text-muted)' }}>Bank Details for Payment</p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8, fontSize: 12 }}>
                   <div><span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>2284429344 - Nzelu Akachukwu (Zenith Bank)</span></div>

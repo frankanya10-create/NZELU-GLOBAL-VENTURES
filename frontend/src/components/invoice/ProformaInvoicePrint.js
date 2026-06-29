@@ -43,6 +43,12 @@ export default function ProformaInvoicePrint({ invoice }) {
                 <span className="label">Customer Tel</span>
                 <div className="value" style={{ fontWeight: 500 }}>{invoice.customerSnapshot?.telephone || '—'}</div>
               </div>
+              {(invoice.customerSnapshot?.address || invoice.billTo) && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <span className="label">Address</span>
+                  <div className="value" style={{ fontWeight: 500 }}>{invoice.customerSnapshot?.address || invoice.billTo}</div>
+                </div>
+              )}
             </div>
           </div>
 
