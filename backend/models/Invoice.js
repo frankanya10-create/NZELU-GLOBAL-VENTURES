@@ -114,16 +114,6 @@ const invoiceSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Branch',
   },
-  depositPercent: {
-    type: Number,
-    default: 70,
-    min: 0,
-    max: 100,
-  },
-  isSupplied: {
-    type: Boolean,
-    default: false,
-  },
   notes: {
     type: String,
     trim: true,
@@ -148,22 +138,18 @@ invoiceSchema.pre('save', function(next) {
       item.total = item.quantity * item.unitPrice;
     });
     this.subtotal = this.items.reduce((sum, item) => sum + item.total, 0);
-    this.discount = 0;
-    this.vatRate = 0;
-    this.vatAmount = 0;
-    this.grandTotal = this.subtotal;
-    this.balanceDue = this.grandTotal - this.amountPaid;
+    const effectiveDiscount = this.discount || 0;
+    this.grandTotal = this.subtotal - effectiveDiscount;
+    this.balanceDue = this.grandTotal - (this.amountPaid || 0);
 
-    if (this.type === 'cash_sales' || !this.paymentStatus) {
-      if (this.amountPaid >= this.grandTotal) {
-        this.paymentStatus = 'paid';
-        if (this.type === 'cash_sales') this.status = 'paid';
-      } else if (this.amountPaid > 0 && this.amountPaid < this.grandTotal) {
-        this.paymentStatus = 'part_payment';
-        this.status = 'part_payment';
-      } else {
-        this.paymentStatus = 'unpaid';
-      }
+    if (this.amountPaid >= this.grandTotal) {
+      this.paymentStatus = 'paid';
+      if (this.type === 'cash_sales') this.status = 'paid';
+    } else if (this.amountPaid > 0 && this.amountPaid < this.grandTotal) {
+      this.paymentStatus = 'part_payment';
+      this.status = 'part_payment';
+    } else {
+      this.paymentStatus = 'unpaid';
     }
   }
   next();

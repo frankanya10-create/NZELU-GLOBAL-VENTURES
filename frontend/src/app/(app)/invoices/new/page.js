@@ -38,7 +38,9 @@ export default function NewInvoicePage() {
   const [customerAddress, setCustomerAddress] = useState('');
   const [items, setItems] = useState([{ description: '', quantity: '', unit: 'pcs', unitPrice: '', product: null, roll: null, rollId: '' }]);
   const [subtotal, setSubtotal] = useState(0);
-  
+  const [discount, setDiscount] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
+
   const [amountPaid, setAmountPaid] = useState('');
   const [grandTotal, setGrandTotal] = useState(0);
   const [balanceDue, setBalanceDue] = useState(0);
@@ -84,7 +86,7 @@ export default function NewInvoicePage() {
     }
   }, [type]);
 
-  useEffect(() => { recalcTotals(); }, [items, amountPaid]);
+  useEffect(() => { recalcTotals(); }, [items, amountPaid, discount]);
 
   useEffect(() => {
     if (delayRef.current) clearTimeout(delayRef.current);
@@ -179,6 +181,8 @@ export default function NewInvoicePage() {
         roll: item.roll?._id || item.roll || null,
         rollId: item.rollId || '',
       })));
+      setDiscount(data.discount?.toString() || '');
+      setDiscountReason(data.discountReason || '');
       setDepositPercent(data.depositPercent?.toString() || '70');
       setIsSupplied(data.isSupplied || false);
       setPaymentStatus(data.paymentStatus || 'unpaid');
@@ -198,11 +202,12 @@ export default function NewInvoicePage() {
 
   const recalcTotals = () => {
     const s = items.reduce((sum, item) => sum + ((parseInt(item.quantity) || 0) * parseFloat(item.unitPrice || 0)), 0);
+    const d = parseFloat(discount) || 0;
+    const gt = Math.max(0, s - d);
     setSubtotal(s);
-    setGrandTotal(s);
+    setGrandTotal(gt);
     const ap = parseFloat(amountPaid) || 0;
-    const bd = Math.max(0, s - ap);
-    setBalanceDue(bd);
+    setBalanceDue(Math.max(0, gt - ap));
   };
 
   const addItem = () => setItems([...items, { description: '', quantity: '', unit: 'pcs', unitPrice: '', product: null, roll: null, rollId: '' }]);
@@ -290,6 +295,8 @@ export default function NewInvoicePage() {
           product: item.product, roll: item.roll, rollId: item.rollId,
         })),
         subtotal,
+        discount: parseFloat(discount) || 0,
+        discountReason: discountReason || undefined,
         depositPercent: type === 'proforma' ? parseInt(depositPercent) || 70 : undefined,
         isSupplied,
         amountPaid: type === 'cash_sales' ? parseFloat(amountPaid || 0) : 0,
@@ -684,6 +691,38 @@ export default function NewInvoicePage() {
                 <span className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Subtotal</span>
                 <span className="text-sm font-black" style={{ color: 'var(--text-primary)' }}>₦{subtotal.toLocaleString()}</span>
               </div>
+
+              <div className="space-y-2 pt-1">
+                <div className="field-group relative">
+                  <input type="text" inputMode="numeric" id="discount" value={discount}
+                    onChange={(e) => setDiscount(e.target.value.replace(/[^0-9.]/g, ''))}
+                    className="peer ngv-input h-10 pt-3 text-sm font-bold" placeholder=" "
+                    style={{ color: discount && parseFloat(discount) > 0 ? '#dc2626' : undefined }} />
+                  <label htmlFor="discount"
+                    className={`absolute left-3 transition-all duration-200 pointer-events-none ${
+                      discount !== '' ? 'top-0.5 text-[9px] font-bold' : 'top-2.5 text-xs'
+                    } peer-focus:top-0.5 peer-focus:text-[9px] peer-focus:font-bold`}
+                    style={{ color: 'var(--text-muted)' }}>
+                    Discount (₦)
+                  </label>
+                </div>
+                {discount && parseFloat(discount) > 0 && (
+                  <div className="field-group relative">
+                    <input type="text" id="discount-reason" value={discountReason}
+                      onChange={(e) => setDiscountReason(e.target.value)}
+                      className="peer ngv-input h-10 pt-3 text-xs" placeholder=" "
+                      maxLength={200} />
+                    <label htmlFor="discount-reason"
+                      className={`absolute left-3 transition-all duration-200 pointer-events-none ${
+                        discountReason ? 'top-0.5 text-[9px] font-bold' : 'top-2.5 text-xs'
+                      } peer-focus:top-0.5 peer-focus:text-[9px] peer-focus:font-bold`}
+                      style={{ color: 'var(--text-muted)' }}>
+                      Discount Reason
+                    </label>
+                  </div>
+                )}
+              </div>
+
               <div className="h-px" style={{ backgroundColor: 'var(--border-primary)' }} />
               <div className="flex justify-between items-center py-1">
                 <span className="text-base font-black" style={{ color: 'var(--text-primary)' }}>Grand Total</span>

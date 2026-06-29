@@ -110,7 +110,12 @@ export default function StandardSalesInvoicePrint({ invoice }) {
               <span style={{ color: '#6b7280' }}>Subtotal</span>
               <span style={{ fontWeight: 700 }}>₦{invoice.subtotal?.toLocaleString()}</span>
             </div>
-            
+            {invoice.discount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 12 }}>
+                <span style={{ color: '#dc2626' }}>Discount {invoice.discountReason ? `(${invoice.discountReason})` : ''}</span>
+                <span style={{ fontWeight: 600, color: '#dc2626' }}>-₦{invoice.discount?.toLocaleString()}</span>
+              </div>
+            )}
             <div style={{ height: 1, background: '#d1d5db', margin: '4px 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 13, fontWeight: 900 }}>
               <span>Grand Total</span>

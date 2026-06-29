@@ -37,7 +37,7 @@ router.get('/summary', async (req, res) => {
       lowStockProducts,
       totalExpenses,
       recentInvoices,
-      topProducts,
+      topCustomers,
     ] = await Promise.all([
       Invoice.aggregate([
         { $match: { ...filter, date: { $gte: todayStart }, type: 'cash_sales', status: 'paid' } },
@@ -71,30 +71,10 @@ router.get('/summary', async (req, res) => {
         .limit(5)
         .populate('customer', 'name telephone')
         .populate('createdBy', 'name'),
-      (async () => {
-        try {
-          const agg = await Invoice.aggregate([
-            { $match: { isDeleted: { $ne: true }, status: { $ne: 'draft' }, 'items.product': { $ne: null } } },
-            { $unwind: '$items' },
-            { $match: { 'items.product': { $ne: null } } },
-            { $group: { _id: '$items.product', totalQty: { $sum: '$items.quantity' }, totalAmount: { $sum: '$items.total' } } },
-            { $sort: { totalAmount: -1 } },
-            { $limit: 5 },
-          ]);
-          const ids = agg.map(a => a._id);
-          const products = ids.length ? await Product.find({ _id: { $in: ids } }).select('name sku unit') : [];
-          const map = {};
-          products.forEach(p => { map[p._id.toString()] = p; });
-          return agg.map(a => ({
-            _id: a._id,
-            name: map[a._id.toString()]?.name || 'Deleted Product',
-            sku: map[a._id.toString()]?.sku || '',
-            unit: map[a._id.toString()]?.unit || 'pcs',
-            totalQty: a.totalQty,
-            totalAmount: a.totalAmount,
-          }));
-        } catch { return []; }
-      })(),
+      Customer.find({ isActive: true })
+        .sort({ totalPurchases: -1 })
+        .limit(5)
+        .select('name telephone totalPurchases'),
     ]);
 
     const data = {
@@ -113,7 +93,7 @@ router.get('/summary', async (req, res) => {
       lowStockProducts: lowStockProducts[0]?.count || 0,
       monthlyExpenses: totalExpenses[0]?.total || 0,
       recentInvoices,
-      topProducts,
+      topCustomers,
     };
 
     if (role === 'administrator' || role === 'manager') {

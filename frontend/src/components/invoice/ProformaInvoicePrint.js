@@ -5,6 +5,7 @@ export default function ProformaInvoicePrint({ invoice }) {
   if (!invoice) return null;
 
   const subtotal = invoice.subtotal || 0;
+  const discount = invoice.discount || 0;
   const grandTotal = invoice.grandTotal || subtotal;
 
   return (
@@ -105,6 +106,12 @@ export default function ProformaInvoicePrint({ invoice }) {
               <span style={{ color: '#6b7280' }}>Subtotal</span>
               <span style={{ fontWeight: 700 }}>₦{subtotal.toLocaleString()}</span>
             </div>
+            {discount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12 }}>
+                <span style={{ color: '#dc2626' }}>Discount {invoice.discountReason ? `(${invoice.discountReason})` : ''}</span>
+                <span style={{ fontWeight: 600, color: '#dc2626' }}>-₦{discount.toLocaleString()}</span>
+              </div>
+            )}
             <div style={{ height: 1, background: '#d1d5db', margin: '2px 0' }} />
             <div className="print-total-block" style={{ marginTop: 4 }}>
               <span>Grand Total</span>

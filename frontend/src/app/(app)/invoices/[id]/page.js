@@ -333,6 +333,12 @@ export default function InvoiceDetailPage() {
                 <span style={{ color: 'var(--text-muted)' }}>Subtotal</span>
                 <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>₦{invoice.subtotal?.toLocaleString()}</span>
               </div>
+              {invoice.discount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 13 }}>
+                  <span style={{ color: '#dc2626' }}>Discount {invoice.discountReason ? `(${invoice.discountReason})` : ''}</span>
+                  <span style={{ fontWeight: 600, color: '#dc2626' }}>-₦{invoice.discount?.toLocaleString()}</span>
+                </div>
+              )}
               <div style={{ height: 1, backgroundColor: 'var(--border-primary)', margin: '4px 0' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 16, fontWeight: 900 }}>
                 <span style={{ color: 'var(--text-primary)' }}>Grand Total</span>

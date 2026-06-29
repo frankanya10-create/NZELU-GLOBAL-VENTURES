@@ -34,7 +34,7 @@ connectDB();
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 1000 : 5000,
+  max: process.env.NODE_ENV === 'production' ? 500 : 10000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many requests, please try again later.' },
@@ -42,24 +42,12 @@ const limiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 10 : 50,
+  max: process.env.NODE_ENV === 'production' ? 30 : 200,
   message: { message: 'Too many login attempts. Please try again in 15 minutes.' },
 });
 
 app.use(cors({
-  origin: (origin, callback) => {
-    const allowedOrigins = [
-      process.env.FRONTEND_URL,
-      'http://localhost:3000',
-    ].filter(Boolean);
-
-    // Allow Vercel deployment URLs (*.vercel.app) and any custom domain set in env
-    if (!origin || allowedOrigins.includes(origin) || /\.vercel\.app$/.test(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true,
 }));
 app.use(express.json({ limit: '50mb' }));
