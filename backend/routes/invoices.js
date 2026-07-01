@@ -315,6 +315,8 @@ router.post('/:id/convert', auditLogger('invoice_converted'), async (req, res) =
         rollId: item.rollId,
       })),
       subtotal: proforma.subtotal,
+      discount: proforma.discount,
+      discountReason: proforma.discountReason,
       grandTotal: proforma.grandTotal,
       amountPaid: proforma.grandTotal,
       balanceDue: 0,
