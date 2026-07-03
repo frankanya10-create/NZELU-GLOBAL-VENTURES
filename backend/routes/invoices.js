@@ -204,7 +204,7 @@ router.post('/:id/commit', auditLogger('invoice_paid'), async (req, res) => {
     }
 
     invoice.status = 'paid';
-    invoice.amountPaid = req.body.amountPaid || invoice.grandTotal;
+    invoice.amountPaid = (invoice.amountPaid || 0) + (parseFloat(req.body.amountPaid) || 0);
     await invoice.save();
 
     if (invoice.customer) {
@@ -295,10 +295,17 @@ router.post('/:id/convert', auditLogger('invoice_converted'), async (req, res) =
       return res.status(400).json({ message: 'Cannot convert a cancelled proforma.' });
     }
 
+    const paymentStatus = req.body.paymentStatus || 'paid';
+    const amountPaid = paymentStatus === 'part_payment'
+      ? (parseFloat(req.body.amountPaid) || 0)
+      : (paymentStatus === 'paid' ? proforma.grandTotal : 0);
+    const balanceDue = Math.max(0, proforma.grandTotal - amountPaid);
+    const invStatus = paymentStatus === 'paid' ? 'paid' : paymentStatus === 'part_payment' ? 'part_payment' : 'pending';
+
     const salesInvoiceData = {
       type: 'cash_sales',
-      status: 'paid',
-      paymentStatus: 'paid',
+      status: invStatus,
+      paymentStatus,
       invoiceCode: await generateInvoiceCode(Invoice, 'cash_sales'),
       date: new Date(),
       customer: proforma.customer,
@@ -318,8 +325,8 @@ router.post('/:id/convert', auditLogger('invoice_converted'), async (req, res) =
       discount: proforma.discount,
       discountReason: proforma.discountReason,
       grandTotal: proforma.grandTotal,
-      amountPaid: proforma.grandTotal,
-      balanceDue: 0,
+      amountPaid,
+      balanceDue,
       createdBy: req.user._id,
       branch: proforma.branch || req.user.branch,
       notes: proforma.notes,

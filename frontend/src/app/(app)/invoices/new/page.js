@@ -201,7 +201,7 @@ export default function NewInvoicePage() {
   };
 
   const recalcTotals = () => {
-    const s = items.reduce((sum, item) => sum + ((parseInt(item.quantity) || 0) * parseFloat(item.unitPrice || 0)), 0);
+    const s = items.reduce((sum, item) => sum + ((parseFloat(item.quantity) || 0) * parseFloat(item.unitPrice || 0)), 0);
     const d = parseFloat(discount) || 0;
     const gt = Math.max(0, s - d);
     setSubtotal(s);
@@ -273,7 +273,7 @@ export default function NewInvoicePage() {
   };
 
   const handleSubmit = async (action) => {
-    if (items.some(i => !i.description || !i.quantity || parseInt(i.quantity) <= 0 || parseFloat(i.unitPrice || 0) <= 0)) {
+    if (items.some(i => !i.description || i.quantity === '' || parseFloat(i.quantity) <= 0 || parseFloat(i.unitPrice || 0) <= 0)) {
       toast.error('Please fill in all line item fields with valid values.');
       return;
     }
@@ -291,7 +291,7 @@ export default function NewInvoicePage() {
         },
         items: items.map(item => ({
           description: item.description, quantity: item.quantity, unit: item.unit,
-          unitPrice: parseFloat(item.unitPrice || 0), total: (parseInt(item.quantity) || 0) * parseFloat(item.unitPrice || 0),
+          unitPrice: parseFloat(item.unitPrice || 0), total: (parseFloat(item.quantity) || 0) * parseFloat(item.unitPrice || 0),
           product: item.product, roll: item.roll, rollId: item.rollId,
         })),
         subtotal,
@@ -608,9 +608,9 @@ export default function NewInvoicePage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <input type="number" value={item.quantity || ''}
-                          onChange={(e) => updateItem(i, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
-                          className="w-full bg-transparent text-sm font-bold text-center outline-none py-1.5" min="0" step="0.01"
+                        <input type="text" inputMode="decimal" value={item.quantity}
+                          onChange={(e) => updateItem(i, 'quantity', e.target.value.replace(/[^0-9.]/g, ''))}
+                          className="w-full bg-transparent text-sm font-bold text-center outline-none py-1.5"
                           style={{ color: 'var(--text-primary)' }} />
                       </td>
                       <td className="px-4 py-3">
@@ -630,7 +630,7 @@ export default function NewInvoicePage() {
                           style={{ color: 'var(--text-primary)' }} />
                       </td>
                       <td className="px-4 py-3 text-right text-sm font-black align-top pt-5" style={{ color: 'var(--text-primary)' }}>
-                        ₦{((parseInt(item.quantity) || 0) * parseFloat(item.unitPrice || 0)).toLocaleString()}
+                        ₦{((parseFloat(item.quantity) || 0) * parseFloat(item.unitPrice || 0)).toLocaleString()}
                       </td>
                       <td className="px-4 py-3 align-top pt-4">
                         {item.product && activeRolls[i]?.length > 0 ? (

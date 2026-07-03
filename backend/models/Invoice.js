@@ -146,7 +146,7 @@ invoiceSchema.pre('save', function(next) {
     this.subtotal = this.items.reduce((sum, item) => sum + item.total, 0);
     const effectiveDiscount = this.discount || 0;
     this.grandTotal = this.subtotal - effectiveDiscount;
-    this.balanceDue = this.grandTotal - (this.amountPaid || 0);
+    this.balanceDue = Math.max(0, this.grandTotal - (this.amountPaid || 0));
 
     if (this.amountPaid >= this.grandTotal) {
       this.paymentStatus = 'paid';
