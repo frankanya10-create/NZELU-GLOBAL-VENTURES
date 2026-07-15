@@ -205,6 +205,7 @@ router.post('/:id/commit', auditLogger('invoice_paid'), async (req, res) => {
 
     invoice.status = 'paid';
     invoice.amountPaid = (invoice.amountPaid || 0) + (parseFloat(req.body.amountPaid) || 0);
+    if (req.body.isSupplied !== undefined) invoice.isSupplied = req.body.isSupplied;
     await invoice.save();
 
     if (invoice.customer) {
@@ -296,6 +297,7 @@ router.post('/:id/convert', auditLogger('invoice_converted'), async (req, res) =
     }
 
     const paymentStatus = req.body.paymentStatus || 'paid';
+    const isSupplied = req.body.isSupplied !== undefined ? req.body.isSupplied : true;
     const amountPaid = paymentStatus === 'part_payment'
       ? (parseFloat(req.body.amountPaid) || 0)
       : (paymentStatus === 'paid' ? proforma.grandTotal : 0);
@@ -327,6 +329,7 @@ router.post('/:id/convert', auditLogger('invoice_converted'), async (req, res) =
       grandTotal: proforma.grandTotal,
       amountPaid,
       balanceDue,
+      isSupplied,
       createdBy: req.user._id,
       branch: proforma.branch || req.user.branch,
       notes: proforma.notes,
@@ -336,7 +339,10 @@ router.post('/:id/convert', auditLogger('invoice_converted'), async (req, res) =
     const salesInvoice = await Invoice.create(salesInvoiceData);
 
     proforma.status = 'converted';
-    proforma.paymentStatus = 'paid';
+    proforma.paymentStatus = paymentStatus;
+    proforma.amountPaid = amountPaid;
+    proforma.balanceDue = balanceDue;
+    proforma.isSupplied = isSupplied;
     proforma.convertedTo = salesInvoice._id;
     await proforma.save();
 

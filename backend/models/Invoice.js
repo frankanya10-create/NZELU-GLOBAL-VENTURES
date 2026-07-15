@@ -124,6 +124,10 @@ const invoiceSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+  isSupplied: {
+    type: Boolean,
+    default: false,
+  },
   isDeleted: {
     type: Boolean,
     default: false,
