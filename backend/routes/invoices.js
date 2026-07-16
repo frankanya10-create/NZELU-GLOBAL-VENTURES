@@ -161,7 +161,14 @@ router.put('/:id', auditLogger('invoice_updated'), async (req, res) => {
     const invoice = await Invoice.findById(req.params.id);
     if (!invoice) return res.status(404).json({ message: 'Invoice not found.' });
 
-    if (invoice.status === 'paid' || invoice.status === 'cancelled') {
+    if (invoice.status === 'cancelled') {
+      return res.status(400).json({ message: 'Cannot update a cancelled invoice.' });
+    }
+
+    // Converted invoices (proforma -> sales) can still be edited after conversion.
+    // Directly committed/paid invoices remain locked to protect financial records.
+    const isConverted = !!invoice.convertedFrom;
+    if ((invoice.status === 'paid' || invoice.status === 'part_payment') && !isConverted) {
       return res.status(400).json({ message: `Cannot update a ${invoice.status} invoice.` });
     }
 
