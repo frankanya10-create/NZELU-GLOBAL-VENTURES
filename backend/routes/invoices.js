@@ -138,7 +138,18 @@ router.post('/', auditLogger('invoice_created', {
 
     invoiceData.invoiceCode = await generateInvoiceCode(Invoice, invoiceData.type || 'proforma');
 
-    const invoice = await Invoice.create(invoiceData);
+    let invoice;
+    let attempts = 0;
+    while (true) {
+      try {
+        invoice = await Invoice.create(invoiceData);
+        break;
+      } catch (error) {
+        if (error.code !== 11000 || attempts >= 2) throw error;
+        attempts += 1;
+        invoiceData.invoiceCode = await generateInvoiceCode(Invoice, invoiceData.type || 'proforma');
+      }
+    }
 
     await createAuditLog('invoice_created', req.user, req, {
       invoiceCode: invoice.invoiceCode,
@@ -208,6 +219,10 @@ router.post('/:id/commit', auditLogger('invoice_paid'), async (req, res) => {
 
     if (invoice.type !== 'cash_sales') {
       return res.status(400).json({ message: 'Only Cash Sales invoices can be committed.' });
+    }
+
+    if (invoice.status === 'paid') {
+      return res.status(400).json({ message: `Invoice ${invoice.invoiceCode} is already paid.` });
     }
 
     invoice.status = 'paid';

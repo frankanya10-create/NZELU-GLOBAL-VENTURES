@@ -68,7 +68,7 @@ export default function InvoiceDetailPage() {
     try {
       const res = await invoicesAPI.get(params.id);
       setInvoice(res.data.data);
-      setCommitAmount(res.data.data.grandTotal);
+      setCommitAmount(Math.max(0, (res.data.data.grandTotal || 0) - (res.data.data.amountPaid || 0)));
     } catch {
       toast.error('Invoice not found.');
       router.push('/invoices');

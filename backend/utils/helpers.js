@@ -1,11 +1,20 @@
 const generateInvoiceCode = async (Invoice, type) => {
   const year = new Date().getFullYear();
   const prefix = type === 'proforma' ? 'NGV-PRO' : 'NGV-CSH';
-  const count = await Invoice.countDocuments({
-    invoiceCode: new RegExp(`^${prefix}-${year}`),
-  });
-  const seq = String(count + 1).padStart(6, '0');
-  return `${prefix}-${year}-${seq}`;
+  // Derive the next sequence from the HIGHEST existing code instead of the
+  // document count. Count-based generation can collide with existing codes
+  // (deleted/out-of-order codes) and fail every create with a duplicate-key
+  // error ("Failed to create invoice").
+  const docs = await Invoice.find({ invoiceCode: new RegExp(`^${prefix}-${year}-`) })
+    .select('invoiceCode')
+    .lean();
+  let maxSeq = 0;
+  for (const doc of docs) {
+    const parts = doc.invoiceCode.split('-');
+    const seq = parseInt(parts[parts.length - 1], 10);
+    if (!Number.isNaN(seq) && seq > maxSeq) maxSeq = seq;
+  }
+  return `${prefix}-${year}-${String(maxSeq + 1).padStart(6, '0')}`;
 };
 
 const generateTransferCode = async (Transfer) => {

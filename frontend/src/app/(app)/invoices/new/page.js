@@ -299,7 +299,7 @@ export default function NewInvoicePage() {
         discountReason: discountReason || undefined,
         depositPercent: type === 'proforma' ? parseInt(depositPercent) || 70 : undefined,
         isSupplied,
-        amountPaid: type === 'cash_sales' ? parseFloat(amountPaid || 0) : 0,
+        amountPaid: 0,
         grandTotal, balanceDue, paymentStatus, notes,
       };
       let invoice;
@@ -315,7 +315,7 @@ export default function NewInvoicePage() {
       }
       router.push('/invoices/' + invoice._id);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to create invoice.');
+      toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to create invoice.');
     } finally {
       setSaving(false);
     }
