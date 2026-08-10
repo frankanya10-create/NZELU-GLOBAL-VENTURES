@@ -105,7 +105,26 @@ router.post('/', auditLogger('invoice_created', {
       return res.status(403).json({ message: 'Storekeepers cannot create invoices.' });
     }
 
-    const invoiceData = { ...req.body, createdBy: req.user._id, branch: req.body.branch || req.user.branch };
+    const rawBranch = req.body.branch || req.user.branch;
+    const invoiceData = {
+      ...req.body,
+      createdBy: req.user._id,
+      branch: rawBranch && mongoose.isValidObjectId(rawBranch) ? rawBranch : undefined,
+    };
+
+    if (invoiceData.items && !Array.isArray(invoiceData.items)) invoiceData.items = [];
+    if (Array.isArray(invoiceData.items)) {
+      invoiceData.items = invoiceData.items.map(item => {
+        const quantity = Number(item.quantity);
+        const unitPrice = Number(item.unitPrice);
+        return {
+          ...item,
+          quantity: Number.isFinite(quantity) ? quantity : 0,
+          unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
+          total: Number(item.total),
+        };
+      });
+    }
 
     if (invoiceData.type === 'proforma') {
       const date = invoiceData.date ? new Date(invoiceData.date) : new Date();
@@ -159,7 +178,7 @@ router.post('/', auditLogger('invoice_created', {
 
     res.status(201).json({ message: 'Invoice created successfully.', data: invoice });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to create invoice.', error: error.message });
+    res.status(500).json({ message: `Failed to create invoice: ${error.message}`, error: error.message });
   }
 });
 
@@ -184,6 +203,20 @@ router.put('/:id', auditLogger('invoice_updated'), async (req, res) => {
     }
 
     const updates = req.body;
+
+    if (updates.items && !Array.isArray(updates.items)) updates.items = [];
+    if (Array.isArray(updates.items)) {
+      updates.items = updates.items.map(item => {
+        const quantity = Number(item.quantity);
+        const unitPrice = Number(item.unitPrice);
+        return {
+          ...item,
+          quantity: Number.isFinite(quantity) ? quantity : 0,
+          unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
+          total: Number(item.total),
+        };
+      });
+    }
 
     if (updates.customer) {
       const customer = await Customer.findById(updates.customer);

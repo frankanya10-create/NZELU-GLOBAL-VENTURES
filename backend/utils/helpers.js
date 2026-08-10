@@ -10,6 +10,7 @@ const generateInvoiceCode = async (Invoice, type) => {
     .lean();
   let maxSeq = 0;
   for (const doc of docs) {
+    if (typeof doc.invoiceCode !== 'string') continue;
     const parts = doc.invoiceCode.split('-');
     const seq = parseInt(parts[parts.length - 1], 10);
     if (!Number.isNaN(seq) && seq > maxSeq) maxSeq = seq;

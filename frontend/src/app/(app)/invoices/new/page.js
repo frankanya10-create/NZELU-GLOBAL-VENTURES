@@ -299,7 +299,7 @@ export default function NewInvoicePage() {
         discountReason: discountReason || undefined,
         depositPercent: type === 'proforma' ? parseInt(depositPercent) || 70 : undefined,
         isSupplied,
-        amountPaid: 0,
+        amountPaid: loadedFrom?.id ? parseFloat(amountPaid || 0) : 0,
         grandTotal, balanceDue, paymentStatus, notes,
       };
       let invoice;
