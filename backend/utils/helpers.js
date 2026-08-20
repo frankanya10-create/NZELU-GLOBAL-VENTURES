@@ -1,10 +1,17 @@
-const generateInvoiceCode = async (Invoice, type) => {
-  const year = new Date().getFullYear();
-  const prefix = type === 'proforma' ? 'NGV-PRO' : 'NGV-CSH';
-  // Derive the next sequence from the HIGHEST existing code instead of the
-  // document count. Count-based generation can collide with existing codes
-  // (deleted/out-of-order codes) and fail every create with a duplicate-key
-  // error ("Failed to create invoice").
+const mongoose = require('mongoose');
+
+let CounterModel;
+const getCounterModel = () => {
+  if (!CounterModel) {
+    CounterModel = mongoose.models.Counter || mongoose.model('Counter', new mongoose.Schema({
+      _id: String,
+      seq: Number,
+    }));
+  }
+  return CounterModel;
+};
+
+const getMaxInvoiceSeq = async (Invoice, prefix, year) => {
   const docs = await Invoice.find({ invoiceCode: new RegExp(`^${prefix}-${year}-`) })
     .select('invoiceCode')
     .lean();
@@ -15,7 +22,34 @@ const generateInvoiceCode = async (Invoice, type) => {
     const seq = parseInt(parts[parts.length - 1], 10);
     if (!Number.isNaN(seq) && seq > maxSeq) maxSeq = seq;
   }
-  return `${prefix}-${year}-${String(maxSeq + 1).padStart(6, '0')}`;
+  return maxSeq;
+};
+
+const generateInvoiceCode = async (Invoice, type) => {
+  const year = new Date().getFullYear();
+  const prefix = type === 'proforma' ? 'NGV-PRO' : 'NGV-CSH';
+  const counterId = `invoice-${prefix}-${year}`;
+  const Counter = getCounterModel();
+
+  // Seed the counter once from the highest existing code. Every subsequent call
+  // uses an atomic $inc, so concurrent creates can never produce the same code.
+  try {
+    await Counter.updateOne(
+      { _id: counterId, seq: { $exists: false } },
+      { $setOnInsert: { seq: await getMaxInvoiceSeq(Invoice, prefix, year) } },
+      { upsert: true },
+    );
+  } catch (error) {
+    if (error.code !== 11000) throw error;
+  }
+
+  const counter = await Counter.findOneAndUpdate(
+    { _id: counterId },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true },
+  );
+
+  return `${prefix}-${year}-${String(counter.seq).padStart(6, '0')}`;
 };
 
 const generateTransferCode = async (Transfer) => {

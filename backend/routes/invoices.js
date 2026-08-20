@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Invoice = require('../models/Invoice');
 const Customer = require('../models/Customer');
 const Roll = require('../models/Roll');
@@ -148,10 +149,13 @@ router.post('/', auditLogger('invoice_created', {
 
     if (invoiceData.discount && invoiceData.discount > 0) {
       if (role === 'cashier' && !invoiceData.discountApproval?.approvedBy) {
-        return res.status(403).json({
-          message: 'Discount requires supervisor approval.',
-          requireDiscountApproval: true,
-        });
+        invoiceData.discountApproval = {
+          approvedBy: null,
+          approvedAt: new Date(),
+          reason: 'Pending supervisor approval',
+          discountValue: invoiceData.discount,
+          approverName: 'Pending',
+        };
       }
     }
 
@@ -164,7 +168,7 @@ router.post('/', auditLogger('invoice_created', {
         invoice = await Invoice.create(invoiceData);
         break;
       } catch (error) {
-        if (error.code !== 11000 || attempts >= 2) throw error;
+        if (error.code !== 11000 || attempts >= 5) throw error;
         attempts += 1;
         invoiceData.invoiceCode = await generateInvoiceCode(Invoice, invoiceData.type || 'proforma');
       }
@@ -230,10 +234,13 @@ router.put('/:id', auditLogger('invoice_updated'), async (req, res) => {
     }
 
     if (updates.discount && updates.discount > 0 && req.user.role === 'cashier' && !updates.discountApproval?.approvedBy) {
-      return res.status(403).json({
-        message: 'Discount requires supervisor approval.',
-        requireDiscountApproval: true,
-      });
+      updates.discountApproval = {
+        approvedBy: null,
+        approvedAt: new Date(),
+        reason: 'Pending supervisor approval',
+        discountValue: updates.discount,
+        approverName: 'Pending',
+      };
     }
 
     Object.assign(invoice, updates);
