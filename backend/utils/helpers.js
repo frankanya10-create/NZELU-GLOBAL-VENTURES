@@ -35,7 +35,7 @@ const generateInvoiceCode = async (Invoice, type) => {
   // uses an atomic $inc, so concurrent creates can never produce the same code.
   try {
     await Counter.updateOne(
-      { _id: counterId, seq: { $exists: false } },
+      { _id: counterId },
       { $setOnInsert: { seq: await getMaxInvoiceSeq(Invoice, prefix, year) } },
       { upsert: true },
     );

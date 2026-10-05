@@ -113,7 +113,9 @@ router.post('/', auditLogger('invoice_created', {
       branch: rawBranch && mongoose.isValidObjectId(rawBranch) ? rawBranch : undefined,
     };
 
-    if (invoiceData.items && !Array.isArray(invoiceData.items)) invoiceData.items = [];
+    if (invoiceData.items !== undefined && !Array.isArray(invoiceData.items)) {
+      return res.status(400).json({ message: 'Invoice items must be a list.' });
+    }
     if (Array.isArray(invoiceData.items)) {
       invoiceData.items = invoiceData.items.map(item => {
         const quantity = Number(item.quantity);
@@ -122,7 +124,11 @@ router.post('/', auditLogger('invoice_created', {
           ...item,
           quantity: Number.isFinite(quantity) ? quantity : 0,
           unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
-          total: Number(item.total),
+          // The model calculates totals from quantity and unitPrice. Do not
+          // cast a missing client total to NaN and fail an otherwise valid save.
+          total: Number.isFinite(quantity) && Number.isFinite(unitPrice)
+            ? quantity * unitPrice
+            : 0,
         };
       });
     }
@@ -182,7 +188,12 @@ router.post('/', auditLogger('invoice_created', {
 
     res.status(201).json({ message: 'Invoice created successfully.', data: invoice });
   } catch (error) {
-    res.status(500).json({ message: `Failed to create invoice: ${error.message}`, error: error.message });
+    const isValidationError = error.name === 'ValidationError' || error.name === 'CastError';
+    const status = isValidationError ? 400 : 500;
+    res.status(status).json({
+      message: isValidationError ? `Invoice details are invalid: ${error.message}` : `Failed to create invoice: ${error.message}`,
+      error: error.message,
+    });
   }
 });
 
