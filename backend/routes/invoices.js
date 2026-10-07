@@ -276,6 +276,24 @@ router.post('/:id/commit', auditLogger('invoice_paid'), async (req, res) => {
       return res.status(400).json({ message: `Invoice ${invoice.invoiceCode} is already paid.` });
     }
 
+    // Validate the total quantity required from each roll before changing the
+    // invoice, customer balance, or any stock. A roll can appear on multiple
+    // invoice lines, so validate the combined quantity rather than each line.
+    const rollRequirements = new Map();
+    for (const item of invoice.items) {
+      if (!item.roll || item.quantity <= 0) continue;
+      const rollId = item.roll._id.toString();
+      const required = (rollRequirements.get(rollId)?.required || 0) + item.quantity;
+      rollRequirements.set(rollId, { roll: item.roll, required });
+    }
+    for (const { roll, required } of rollRequirements.values()) {
+      if (roll.remainingBalance < required) {
+        return res.status(400).json({
+          message: `Insufficient balance on Roll ${roll.rollId}. Available: ${roll.remainingBalance}, Required: ${required}`,
+        });
+      }
+    }
+
     invoice.status = 'paid';
     invoice.amountPaid = (invoice.amountPaid || 0) + (parseFloat(req.body.amountPaid) || 0);
     if (req.body.isSupplied !== undefined) invoice.isSupplied = req.body.isSupplied;
@@ -305,11 +323,6 @@ router.post('/:id/commit', auditLogger('invoice_paid'), async (req, res) => {
         const roll = await Roll.findById(item.roll);
         if (roll) {
           const remainingBefore = roll.remainingBalance;
-          if (roll.remainingBalance < item.quantity) {
-            return res.status(400).json({
-              message: `Insufficient balance on Roll ${roll.rollId}. Available: ${roll.remainingBalance}, Required: ${item.quantity}`,
-            });
-          }
           roll.remainingBalance -= item.quantity;
           if (roll.remainingBalance <= 0) {
             roll.remainingBalance = 0;

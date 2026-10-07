@@ -310,7 +310,14 @@ export default function NewInvoicePage() {
         const res = await invoicesAPI.create(payload);
         invoice = res.data.data;
         if (type === 'cash_sales' && parseFloat(amountPaid || 0) > 0) {
-          await invoicesAPI.commit(invoice._id, { amountPaid });
+          try {
+            await invoicesAPI.commit(invoice._id, { amountPaid });
+          } catch (paymentError) {
+            const detail = paymentError.response?.data?.message || paymentError.response?.data?.error;
+            toast.error(`Invoice ${invoice.invoiceCode} was created, but payment could not be recorded${detail ? `: ${detail}` : '.'}`);
+            router.push('/invoices/' + invoice._id);
+            return;
+          }
         }
       }
       router.push('/invoices/' + invoice._id);
